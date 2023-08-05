@@ -13,6 +13,7 @@ const io = new Server(server, {
         origin: ["https://admin.socket.io", "http://127.0.0.1:5500"],
         credentials: true,
     },
+    path: "https://complextoeserveradmin.onrender.com"
 });
 
 // dev
