@@ -13,7 +13,7 @@ const io = new Server(server, {
         origin: ["https://admin.socket.io", "http://127.0.0.1:5500", "https://complextoeserveradmin.onrender.com"],
         credentials: true,
     },
-    path: "https://complextoeserveradmin.onrender.com"
+    // path: "https://complextoeserveradmin.onrender.com"
 });
 
 // dev
@@ -23,7 +23,7 @@ instrument(io, {
         username: "admin",
         password: "$2b$10$qoNcQaDE/Ri9B5Q40JQVHuWQV4Vzm6da8Tiwh50SIYiK/0N7CLYxG",
     },
-    mode: 'development'
+    mode: 'production'
 });
 
 App.get('/', (req, res) => {
