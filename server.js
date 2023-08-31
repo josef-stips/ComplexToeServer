@@ -397,7 +397,7 @@ io.on('connection', socket => {
     });
 
     // Some client clicked on the board
-    // data[0] = id, data[2] = cell Index, data[3] = player form (x,o,z etc.)
+    // data[0] = id, data[2] = cell Index, data[3] = player form (x,o,z etc.), data[5] = skin color of player
     socket.on('PlayerClicked', (data) => {
         ServerData.RoomData[parseFloat(data[0])]['game']['options'][data[2]] = data[3];
 
@@ -409,7 +409,7 @@ io.on('connection', socket => {
             data[4] = true;
         };
 
-        io.to(parseInt(data[0])).emit('player_clicked', [ServerData.RoomData[parseFloat(data[0])]['game']['options'], data[4]]);
+        io.to(parseInt(data[0])).emit('player_clicked', [ServerData.RoomData[parseFloat(data[0])]['game']['options'], data[4], data[5]]);
     });
 
     // Bug fix for the single_CellBlock function in the checkWinner function when Player sets his form
