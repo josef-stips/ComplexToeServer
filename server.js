@@ -1,4 +1,5 @@
 const { instrument } = require('@socket.io/admin-ui');
+const database = require("./database");
 
 const http = require('http');
 const express = require('express');
@@ -23,7 +24,7 @@ instrument(io, {
         username: "admin",
         password: "$2b$10$qoNcQaDE/Ri9B5Q40JQVHuWQV4Vzm6da8Tiwh50SIYiK/0N7CLYxG",
     },
-    mode: 'production'
+    mode: 'development'
 });
 
 App.get('/', (req, res) => {
@@ -73,6 +74,76 @@ let ServerData = {
 io.on('connection', socket => {
     console.log('a user connected to the server ' + socket.id);
 
+    // Check if the player was at least once in this app
+    // if yes, pass some information. f.e the treasure countdown so it does not restart everytime the player opens the app
+    io.to(socket.id).emit('CheckIfPlayerAlreadyExists');
+
+    // Player already was in the game
+    socket.on("PlayerAlreadyExists", async(PlayerID, treasureIsAvailible) => {
+        // If the player already exists, a countdown (interval) is playing in the background in the database already
+        // Check if the countdown is done
+        if (treasureIsAvailible == "false") {
+            let answer = await database.checkIfCountDown(parseInt(PlayerID));
+
+            if (answer[0].length >= 1) {
+                // send message to user so he is updated and treasure is availible till he opens it
+                io.to(socket.id).emit('availible-treasure');
+
+            } else {
+                // Treasure is not open, interval is not over
+                // send timestamp to client so it knows when the treasure is open
+                let datetime = await database.getTreasure_TimeStamp(parseInt(PlayerID));
+                io.to(socket.id).emit('availible-treasure-NOT', datetime);
+            };
+
+            // treasure is open but user doesn't opened it in his last log in
+        } else if (treasureIsAvailible == "true") {
+            return;
+        };
+    });
+
+    // Player is for the first time in the game
+    socket.on("PlayerNotExisted", async() => {
+        // create player by add a new row to the connection time: player id is auto_increment
+        // return auto generated player id
+        let [{ player_id: playerID }] = await database.createPlayer();
+        console.log(playerID)
+
+        // send id to player, player saves it his storage
+        io.to(socket.id).emit("RandomPlayerID_generated", playerID);
+    });
+
+    // activate chest countdown again after opening
+    socket.on('activate-treasureCountDown', (PlayerID, UserOpenedTreasureOnceBefore, afterOpening) => {
+        if (afterOpening == "afterOpening") {
+            // kill old interval
+            if (UserOpenedTreasureOnceBefore == "false") {
+                // Player never opened the treasure in this game
+                // so a new time stamp needs to be created with his player_id as an id
+                database.createTimeStamp(parseInt(PlayerID));
+
+            } else if (UserOpenedTreasureOnceBefore == "true") {
+                // Player opened the treasure once before
+                // So the countdown (interval) just needs to be updated
+                database.updateTimeStamp(parseInt(PlayerID));
+            };
+        };
+    });
+
+    // user checks every second when the treasure countdown (interval) is still "running" or done (in the databse)
+    // It is actually a timestamp 24 hours away from the datetime of the last treasure opening
+    socket.on("check_Treasure_Countdown", async(playerID) => {
+        // check 
+        if (!isNaN(parseInt(playerID))) {
+            let answer = await database.checkIfCountDown(parseInt(playerID));
+
+            // if true then the treasure is availible
+            if (answer[0].length >= 1) {
+                io.to(socket.id).emit('availible-treasure');
+            };
+        };
+    });
+
     // player disconnected from the lobby
     socket.on('disconnect', reason => {
         console.log('user disconnected from the server ' + socket.id);
@@ -113,16 +184,12 @@ io.on('connection', socket => {
 
                     // if in game
                     if (!isPlaying) {
-                        console.log("NOT in game")
                         io.to(el['players'][1]['socket']).emit('INFORM_user_left_room');
-
                         break;
 
                     } else if (isPlaying) { // if not in game
-                        console.log("in game")
                         io.to(el['players'][1]['socket']).emit('INFORM_user_left_game');
                         isPlaying = false;
-
                         break;
                     };
 
