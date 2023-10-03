@@ -68,7 +68,6 @@ async function main() {
         console.log("an error while loading the players occured: " + err);
     };
 };
-
 // main();
 
 // export database functions

@@ -242,7 +242,7 @@ io.on('connection', socket => {
             console.log(roomID)
 
             // Inform and update the page of all other people who are clients of the room about the name of the admin
-            io.to(roomID).emit('Admin_Created_And_Joined', [GameData[3], GameData[4]]); // PlayerData[0] => name of admin
+            io.to(roomID).emit('Admin_Created_And_Joined', [GameData[3], GameData[4]]); // PlayerData[0] => name of admin, PlayerData[1] => icon of admin
 
         } else {
             createID(min, max);
@@ -476,7 +476,7 @@ io.on('connection', socket => {
             data[4] = true;
         };
 
-        io.to(parseInt(data[0])).emit('player_clicked', [ServerData.RoomData[parseFloat(data[0])]['game']['options'], data[4], data[5]]);
+        io.to(parseInt(data[0])).emit('player_clicked', [ServerData.RoomData[parseFloat(data[0])]['game']['options'], data[4], data[5], data[6]]);
     });
 
     // Bug fix for the single_CellBlock function in the checkWinner function when Player sets his form
