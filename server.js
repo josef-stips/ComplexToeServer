@@ -181,6 +181,8 @@ io.on('connection', socket => {
                     el['players'][2]['icon'] = '';
                     el['players'][2]['role'] = 'user';
                     el['players'][2]['socket'] = '';
+                    el['players'][2]['advanced_icon'] = '';
+                    el['players'][2]['icon_color'] = '';
 
                     // if in game
                     if (!isPlaying) {
@@ -220,8 +222,8 @@ io.on('connection', socket => {
                 'id': roomID,
                 // create game data for admin
                 'players': {
-                    1: { 'name': GameData[3], 'icon': GameData[4], 'role': 'admin', 'socket': socket.id }, // You who created the room
-                    2: { 'name': '', 'icon': '', 'role': 'user', 'socket': '' } // Your friend who will join the room
+                    1: { 'name': GameData[3], 'icon': GameData[4], 'role': 'admin', 'socket': socket.id, 'advanced_icon': GameData[7], 'icon_color': GameData[8] }, // You who created the room
+                    2: { 'name': '', 'icon': '', 'role': 'user', 'socket': '', 'advanced_icon': '', 'icon_color': '' } // Your friend who will join the room
                 },
                 // create a part of the game data to display in the lobby
                 'game': {
@@ -242,7 +244,7 @@ io.on('connection', socket => {
             console.log(roomID)
 
             // Inform and update the page of all other people who are clients of the room about the name of the admin
-            io.to(roomID).emit('Admin_Created_And_Joined', [GameData[3], GameData[4]]); // PlayerData[0] => name of admin, PlayerData[1] => icon of admin
+            io.to(roomID).emit('Admin_Created_And_Joined', [GameData[3], GameData[4], GameData[7]]); // PlayerData[0] => name of admin, PlayerData[1] => icon of admin
 
         } else {
             createID(min, max);
@@ -290,21 +292,27 @@ io.on('connection', socket => {
         };
 
         // Check if users icon is equal to admins icon
-        if (data[2] == ServerData.RoomData[parseInt(data[0])]['players'][1]['icon']) {
+        if (data[2] == ServerData.RoomData[parseInt(data[0])]['players'][1]['icon'] && data[3] == "empty" || data[3] == ServerData.RoomData[parseInt(data[0])]['players'][1]['advanced_icon'] && data[3] != "empty") {
             callback('Choose a different icon!');
             return;
         };
+
+        // advanced skin of first player
+        let advancedSkin_firstPlayer = ServerData.RoomData[parseInt(data[0])]['players'][1]['advanced_icon'];
+        let skinColor_firstPlayer = ServerData.RoomData[parseInt(data[0])]['players'][1]['icon_color'];
 
         // save data in object
         // The 'role' is already declared when the room was created by the admin
         ServerData.RoomData[data[0]]['players'][2]['name'] = data[1]; // set user name
         ServerData.RoomData[data[0]]['players'][2]['icon'] = data[2]; // set user icon
         ServerData.RoomData[data[0]]['players'][2]['socket'] = socket.id; // set user socket.id
+        ServerData.RoomData[data[0]]['players'][2]['advanced_icon'] = data[3]; // set user advanced skin, if he doesn't have one it displays "empty" so his shoosed letter
+        ServerData.RoomData[data[0]]['players'][2]['icon_color'] = data[4]; // skin color of user
 
         // updates the html of all players in the room with the name of the second player
-        io.to(parseInt(data[0])).emit('SecondPlayer_Joined', [data[1], data[2]]); // second parameter => icon of second player
+        io.to(parseInt(data[0])).emit('SecondPlayer_Joined', [data[1], data[2], data[3], data[4]]); // second parameter => icon of second player
 
-        callback([data[1], ServerData.RoomData[parseInt(data[0])]['players'][1]['name'], ServerData.RoomData[parseInt(data[0])]['players'][1]['icon'], data[2]]);
+        callback([data[1], ServerData.RoomData[parseInt(data[0])]['players'][1]['name'], ServerData.RoomData[parseInt(data[0])]['players'][1]['icon'], data[2], data[3], advancedSkin_firstPlayer, skinColor_firstPlayer]);
     });
 
     // user leaves lobby. if admin leaves lobby => room gets killes and all users in there gets kicked out
@@ -356,6 +364,8 @@ io.on('connection', socket => {
                 ServerData.RoomData[parseInt(roomID)]['players'][2]['name'] = ''; // delete user name
                 ServerData.RoomData[parseInt(roomID)]['players'][2]['icon'] = ''; // delete user icon
                 ServerData.RoomData[parseInt(roomID)]['players'][2]['socket'] = ''; // delete user socket.id
+                ServerData.RoomData[parseInt(roomID)]['players'][2]['advanced_icon'] = ''; // delete advanced skin 
+                ServerData.RoomData[parseInt(roomID)]['players'][2]['icon_color'] = ''; // delete skin color
 
                 // user just leaves
                 socket.leave(parseInt(roomID));
@@ -551,6 +561,11 @@ io.on('connection', socket => {
         root['PlayerTimer'] = PlayerTimer;
         root['fieldIndex'] = fieldIndex;
         root['fieldTitle'] = fieldTitle;
+    });
+
+    // socket client sends text message in the online game mode message feature
+    socket.on("sendMessage", (text, from, id) => {
+        io.to(parseInt(id)).emit("recieveMessage", text, from);
     });
 });
 
