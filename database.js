@@ -72,8 +72,11 @@ async function getTreasure_TimeStamp(player_id) {
 };
 
 // user updates his name or creates one. this name needs to be stored in 'players' table
-async function PlayerUpdatesName(player_id, newName) {
-    pool.query(`update players set player_name = ? where player_id = ?`, [newName, player_id])
+async function PlayerUpdatesData(player_id, newName, newIcon, playerInfoClass, playerInfoColor) {
+    await pool.query(`update players set player_name = ? where player_id = ?`, [newName, player_id]);
+    await pool.query('update players set player_icon = ? where player_id = ?', [newIcon, player_id]);
+    await pool.query(`update players set playerInfoClass = ? where player_id = ?`, [playerInfoClass, player_id]);
+    await pool.query('update players set playerInfoColor = ? where player_id = ?', [playerInfoColor, player_id]);
 };
 
 // player creates room
@@ -268,6 +271,31 @@ async function UpdateGameData(id, xyCellAmount, InnerGameMode, PlayerTimer, fiel
     await pool.query(`update roomdata set xyCellAmount = ?,InnerGameMode = ?, PlayerTimer = ?, fieldIndex = ?, fieldTitle = ? where RoomID = ?`, [parseInt(xyCellAmount), InnerGameMode, parseInt(PlayerTimer), parseInt(fieldIndex), fieldTitle, parseInt(id)]);
 };
 
+// User submits or creates new quote
+const NewPlayerProfileQuote = async(quote, player_id) => {
+    await pool.query('update players set quote = ? where player_id = ?', [quote, player_id]);
+};
+
+// Update all user data to database as quick fix
+const UpdateAllUserData = async(player_name, player_icon, playerInfoClass, playerInfoColor, quote, onlineGamesWon, XP, current_used_skin, player_id) => {
+    await pool.query(`update players set player_name = ?, player_icon = ?, playerInfoClass = ?, playerInfoColor = ?, quote = ?, onlineGamesWon = ?, 
+    XP = ?, currentUsedSkin = ? where player_id = ?`, [player_name, player_icon, playerInfoClass, playerInfoColor, quote, onlineGamesWon, XP, current_used_skin, player_id]);
+};
+
+// search a player in player table with an id or name
+const SearchPlayers = async(text) => {
+    let result;
+
+    if (isNaN(text)) { // is a text (name of player)
+        [result] = await pool.query(`select * from players where player_name = ? `, [text]);
+
+    } else { // is a number (id of player)
+        [result] = await pool.query(`select * from players where player_id = ? `, [text]);
+    };
+
+    return result;
+};
+
 // try to log functions
 async function main() {
     try {
@@ -288,7 +316,7 @@ module.exports = {
     updateTimeStamp: updateTimeStamp,
     checkIfCountDown: checkIfCountDown,
     getTreasure_TimeStamp: getTreasure_TimeStamp,
-    PlayerUpdatesName: PlayerUpdatesName,
+    PlayerUpdatesData: PlayerUpdatesData,
     Player_UpdateConnection: Player_UpdateConnection,
     CreateRoom: CreateRoom,
     DeleteRoom: DeleteRoom,
@@ -302,5 +330,8 @@ module.exports = {
     BlockerJoinsRoom: BlockerJoinsRoom,
     UpdateGameData: UpdateGameData,
     startEyeAttackInterval: startEyeAttackInterval,
-    stopEyeAttackInterval: stopEyeAttackInterval
+    stopEyeAttackInterval: stopEyeAttackInterval,
+    NewPlayerProfileQuote: NewPlayerProfileQuote,
+    UpdateAllUserData: UpdateAllUserData,
+    SearchPlayers: SearchPlayers
 };

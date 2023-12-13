@@ -169,8 +169,8 @@ io.on('connection', socket => {
     });
 
     // user updated his name on his local game, the updated name needs to be stored in the database
-    socket.on("sendNameToDatabase", async(PlayerID, updatedName) => {
-        await database.PlayerUpdatesName(parseInt(PlayerID), updatedName);
+    socket.on("sendNameToDatabase", async(PlayerID, updatedName, updatedIcon, userInfoClass, userIncoColor) => {
+        await database.PlayerUpdatesData(parseInt(PlayerID), updatedName, updatedIcon, userInfoClass, userIncoColor);
     });
 
     // create game room (lobby) and its game code
@@ -495,8 +495,6 @@ io.on('connection', socket => {
                         attack = false;
                         await database.stopEyeAttackInterval(`eyeAttackInterval_${Data[0]}`);
                         await database.startEyeAttackInterval(parseInt(Data[0]), `eyeAttackInterval_${Data[0]}`);
-
-                        console.log("ksopgkfo")
 
                         io.to(parseInt(Data[0])).emit("EyeAttack");
                     };
@@ -893,6 +891,286 @@ io.on('connection', socket => {
         await database.pool.query(`update roomdata set win_patterns = ? where RoomID = ?`, [JSON.stringify(array), parseInt(id)]);
         io.to(parseInt(id)).emit("Updated_AllowedPatterns", array);
     });
+
+    // Player submits or creates new quote for his user profile
+    socket.on("UserSubmitsNewQuote", async(quote, player_id) => {
+        await database.NewPlayerProfileQuote(quote, parseInt(player_id));
+    });
+
+    // when player clicks on his user profile and he has an account, all his data gets saved in database
+    socket.on("SaveAllData", async(player_name, player_icon, playerInfoClass, playerInfoColor, quote, onlineGamesWon, XP, current_used_skin, player_id) => {
+        await database.UpdateAllUserData(player_name, player_icon, playerInfoClass, playerInfoColor, quote, onlineGamesWon, XP, current_used_skin, parseInt(player_id));
+    })
+
+    // player searches an user with a name or user id
+    socket.on("RequestPlayers", async(text, player_id, player_name, cb) => {
+        let result = await database.SearchPlayers(text);
+
+        // check if one player from it is the player who searches. If yes, delete that player from the list
+        for (let player of result) {
+            console.log("player: ", player);
+
+            if (player["player_id"] == player_id) {
+                result = result.filter(player => player["player_id"] !== player_id);
+            };
+            if (player["player_name"] == player_name) {
+                result = result.filter(player => player["player_name"] !== player_name);
+            };
+        };
+
+        // check result
+        if (result == undefined || result.length == 0) { // no player found
+            cb(false);
+
+        } else { // normal result, player/s found
+            cb(true, result);
+        };
+    });
+
+    // user clicks on friends-list btn to see his friends. load his friends list from database players table
+    socket.on("RequestFriends", async(PlayerID, cb) => {
+        let [FriendsList] = await database.pool.query(`select friends from players where player_id = ?`, [PlayerID]);
+
+        (FriendsList[0]["friends"] != null) ? cb(FriendsList[0]["friends"]): cb(false);
+    });
+
+    // player sends message to other player
+    socket.on("SendMessage_ToOtherPlayer", async(Sender_ID, Sender_Name, message, Receiver_ID, Receiver_Name, cb) => {
+        // get messages from Receiver ID's database
+        let [messages] = await database.pool.query(`select messages from players where player_id = ?`, [Receiver_ID]);
+        let messagesArray = messages[0]["messages"];
+
+        try {
+            if (messagesArray == null) {
+                let NewMessagesArray = [];
+                NewMessagesArray.push([Sender_Name, message]);
+
+                await database.pool.query(`update players set messages = ? where player_id = ?`, [JSON.stringify(NewMessagesArray), Receiver_ID]);
+
+            } else if (messagesArray) {
+                let OldArray = JSON.parse(messagesArray);
+                OldArray.push([Sender_Name, message]);
+
+                await database.pool.query(`update players set messages = ? where player_id = ?`, [JSON.stringify(OldArray), Receiver_ID]);
+            };
+
+        } catch (error) {
+            console.log(error);
+
+        } finally {
+            cb(Receiver_Name); // As callback that everything went good and message is now in the receiver's database  
+        };
+    });
+
+    // App of user requests his own messages from database 
+    socket.on("RequestMessages", async(userID, cb) => {
+        if (userID) {
+            let [messages] = await database.pool.query(`select messages from players where player_id = ?`, [userID]);
+            let messagesArray = messages[0]["messages"];
+
+            // false: no messages, otherwise: array of message/s
+            (messagesArray != null) ? cb(messagesArray): cb(false);
+        };
+    });
+
+    // user clicked on a message so it can be deleted now
+    socket.on("DeleteMessage", async(PlayerID, messageText, cb) => {
+        let [OldArray] = await database.pool.query(`select messages from players where player_id = ?`, [PlayerID]);
+        let TextArray = JSON.parse(OldArray[0]["messages"])
+
+        if (messageText == null) messageText = "";
+
+        console.log(messageText);
+
+        TextArray = TextArray.filter(text => text[1] != messageText);
+
+        console.log(TextArray);
+
+        // send back the amount of messages still existing
+        cb(TextArray.length);
+
+        await database.pool.query(`update players set messages = ? where player_id = ?`, [JSON.stringify(TextArray), PlayerID]);
+    });
+
+    // user requests on the start of the app automatically friend requests
+    socket.on("RequestFriendRequests", async(PlayerID, cb) => {
+        if (PlayerID) {
+            let [rows] = await database.pool.query(`select friend_requests from players where player_id = ?`, [PlayerID]);
+            let FriendRequests = rows[0]["friend_requests"]; // [], null, ["..."]
+
+            // if there is something, send friend request. If not send negative answer
+            (FriendRequests == null || FriendRequests == "[]") ? cb(false): cb(JSON.parse(FriendRequests));
+        };
+    });
+
+    // When player clicks on an user he has to know if he is friends with him. check it here.
+    socket.on("CheckIfUserIsFriend", async(PlayerID, SearchedPlayer_ID, cb) => {
+        let [rows] = await database.pool.query(`select friends from players where player_id = ?`, [PlayerID]);
+        let Friends = rows[0]["friends"];
+
+        console.log(Friends, " asdkopfasjkodopfapsdfkopksdf");
+
+        // check if player has friends
+        if (Friends != null && Friends != "[]") {
+            let FriendsList = JSON.parse(Friends);
+
+            console.log(FriendsList)
+
+            for (let id of FriendsList) {
+                if (id == SearchedPlayer_ID) {
+                    cb(true); // searched player is in friends list!
+                    break;
+                };
+            };
+
+            // if player is not in friends list
+            cb(false);
+
+        } else cb(false); // no friends
+    });
+
+    // User wants to add other player and sends him friend request
+    socket.on("SendFriendRequest", async(SenderID, ReceiverID, cb) => {
+        let [rows] = await database.pool.query(`select friend_requests from players where player_id = ?`, [ReceiverID]);
+        let [FriendsRows] = await database.pool.query(`select friends from players where player_id = ?`, [ReceiverID]);
+        let FriendRequests = rows[0]["friend_requests"];
+        let FriendsList = FriendsRows[0]["friends"];
+
+        if (FriendRequests != null) { // It is an array = Get array, modify array, send back array
+
+            // the user shouldn't send multiple friend request. That's obviously dumb. 
+            // So check if he already sended and return 
+
+            for (let request of JSON.parse(FriendRequests)) {
+                if (request == SenderID) {
+                    cb(false);
+                    return;
+                };
+            };
+
+            // You should also check wether they are already friends but it doesn't display it yet
+            if (FriendsList != null) {
+                for (let id of JSON.parse(FriendsList)) {
+                    if (id == SenderID) {
+                        cb(false);
+                        return;
+                    };
+                };
+            };
+
+            // else:
+
+            // get
+            let FriendRequestList = JSON.parse(FriendRequests);
+            // modify
+            FriendRequestList.push(SenderID);
+            // send back
+            await database.pool.query(`update players set friend_requests = ? where player_id = ?`, [JSON.stringify(FriendRequestList), ReceiverID]);
+
+        } else { // no existing array = Create Array, modify array, send array
+
+            // create
+            let NewArray = [];
+            // modify
+            NewArray.push(SenderID);
+            // send
+            await database.pool.query(`update players set friend_requests = ? where player_id = ?`, [JSON.stringify(NewArray), ReceiverID]);
+        };
+    });
+
+    // User wants to delete other player from his friend list
+    // The first id needs to be deleted on the database from the second player and vice versa
+    socket.on("DeleteFriendFromFriendList", async(PlayerID, PlayerToDeleteFromFriendList_ID) => {
+        // get database data
+        let [rows_fromPlayer1] = await database.pool.query(`select friends from players where player_id = ?`, [PlayerID]);
+        let [rows_fromPlayer2] = await database.pool.query(`select friends from players where player_id = ?`, [PlayerToDeleteFromFriendList_ID]);
+
+        let Player1_FriendsList = JSON.parse(rows_fromPlayer1[0]["friends"]);
+        let Player2_FriendsList = JSON.parse(rows_fromPlayer2[0]["friends"]);
+
+        // delete id's from each other's database. There has not to be a check wether the data is null or something because you can't delete something which doesn't exists
+        Player1_FriendsList = Player1_FriendsList.filter(id => id != PlayerToDeleteFromFriendList_ID);
+        Player2_FriendsList = Player2_FriendsList.filter(id => id != PlayerID);
+
+        // send back updated data
+        await database.pool.query(`update players set friends = ? where player_id = ?`, [Player2_FriendsList, PlayerToDeleteFromFriendList_ID]);
+        await database.pool.query(`update players set friends = ? where player_id = ?`, [Player1_FriendsList, PlayerID]);
+    });
+
+    // Accept friend request 
+    socket.on("AcceptFriendRequest", async(RequesterID, AccepterID, cb) => {
+        let [row] = await database.pool.query(`select friend_requests from players where player_id = ?`, [AccepterID]); // get friend requests
+        let [FriendsRow] = await database.pool.query(`select friends from players where player_id = ?`, [AccepterID]); // get friends list
+        let [FriendsRowFromRequester] = await database.pool.query(`select friends from players where player_id = ?`, [RequesterID]); // get friends list from requester
+        let FriendRequests = row[0]["friend_requests"];
+        let FriendsList = FriendsRow[0]["friends"];
+        let FriendsListFromRequester = FriendsRowFromRequester[0]["friends"];
+
+        if (FriendRequests != null && FriendRequests != "[]") { // savety if question
+            // get array from string
+            let FriendRequestArray = JSON.parse(FriendRequests);
+
+            // delete requester id from friend requests
+            FriendRequestArray = FriendRequestArray.filter(id => id != RequesterID);
+
+            await database.pool.query(`update players set friend_requests = ? where player_id = ?`, [JSON.stringify(FriendRequestArray), AccepterID]);
+
+            // update database of requester so he also knows that they are friends
+            if (FriendsListFromRequester == null) {
+                let NewFriendsListArrayForRequester = [];
+                NewFriendsListArrayForRequester.push(AccepterID);
+
+                await database.pool.query(`update players set friends = ? where player_id = ?`, [JSON.stringify(NewFriendsListArrayForRequester), RequesterID]);
+
+            } else if (FriendsListFromRequester == "[]" || FriendsListFromRequester != null) {
+                let ExistingFriendsListFromRequest = JSON.parse(FriendsListFromRequester);
+                ExistingFriendsListFromRequest.push(AccepterID);
+
+                await database.pool.query(`update players set friends = ? where player_id = ?`, [JSON.stringify(ExistingFriendsListFromRequest), RequesterID]);
+            };
+
+            // Add request id to friends list
+            if (FriendsList == null) { // if no friends yet
+                let NewFriendsListArray = [];
+                NewFriendsListArray.push(RequesterID);
+
+                await database.pool.query(`update players set friends = ? where player_id = ?`, [JSON.stringify(NewFriendsListArray), AccepterID]);
+
+                cb(true); // Requester successfully removed from request list and added to friends list
+
+            } else if (FriendsList == '[]' || FriendsList != null) { // had or has friends
+                let ExistingFriendsList = JSON.parse(FriendsList);
+                ExistingFriendsList.push(RequesterID);
+
+                await database.pool.query(`update players set friends = ? where player_id = ?`, [JSON.stringify(ExistingFriendsList), AccepterID]);
+
+                cb(true); // Requester successfully removed from request list and added to friends list
+            };
+        };
+    });
+
+    // Abort friend request 
+    socket.on("AbortFriendRequest", async(RequesterID, AccepterID, cb) => {
+        // get friend requests list
+        let [row] = await database.pool.query(`select friend_requests from players where player_id = ?`, [AccepterID]); // get friend requests
+        let FriendRequests = JSON.parse(row[0]["friend_requests"]);
+
+        // delete requester id from request list
+        FriendRequests = FriendRequests.filter(requesterID => requesterID != RequesterID);
+
+        // update in database
+        await database.pool.query(`update players set friend_requests = ? where player_id = ?`, [JSON.stringify(FriendRequests), AccepterID]);
+
+        cb(true); // final step
+    });
+
+    // user wants some other player name by his id 
+    socket.on("GetNameByID", async(id, cb) => {
+        let [row] = await database.pool.query(`select player_name from players where player_id = ?`, [id])
+        let Name = row[0]["player_name"];
+
+        cb(Name);
+    })
 });
 
 // generates ID for the room
