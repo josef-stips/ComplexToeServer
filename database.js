@@ -296,6 +296,33 @@ const SearchPlayers = async(text) => {
     return result;
 };
 
+// save new level from player in database
+const SaveNewLevel = async(id, levelData) => {
+    // Check if level already exists and only needs to be overwritten
+    if (levelData.id != 0) {
+        // overwrite already existing level in database with given id
+        let [rows] = await pool.query(`update levels set level_status = ?, field = ?, level_name = ?, creator_id = ?, bg_music = ?, bg1 = ?, bg2 = ?, required_points = ?,
+        player_timer = ?, icon = ?, pattern = ? where id = ?`, [levelData.status, levelData.cellgrid, levelData.name, parseInt(id), levelData.bgmusic, levelData.bgcolor1, levelData.bgcolor2, levelData.requiredpoints, levelData.playertimer,
+            levelData.levelicon, JSON.stringify(levelData.allowedpatterns), levelData.id
+        ]);
+
+        console.log(rows);
+        return rows.insertId;
+
+    } else {
+
+        // write complete new level in database and generate new id
+        let [rows] = await pool.query(`insert into levels (level_status, field, level_name, creator_id, bg_music, bg1, bg2, required_points, player_timer, icon, pattern) values 
+        (?,?,?,?,?,?,?,?,?,?,?)`, [levelData.status, levelData.cellgrid, levelData.name, parseInt(id), levelData.bgmusic, levelData.bgcolor1, levelData.bgcolor2, levelData.requiredpoints, levelData.playertimer,
+            levelData.levelicon, JSON.stringify(levelData.allowedpatterns)
+        ]);
+
+        console.log(rows);
+        return rows.insertId; // unique id of the level
+    };
+
+};
+
 // try to log functions
 async function main() {
     try {
@@ -333,5 +360,6 @@ module.exports = {
     stopEyeAttackInterval: stopEyeAttackInterval,
     NewPlayerProfileQuote: NewPlayerProfileQuote,
     UpdateAllUserData: UpdateAllUserData,
-    SearchPlayers: SearchPlayers
+    SearchPlayers: SearchPlayers,
+    SaveNewLevel
 };
