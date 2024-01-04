@@ -1221,6 +1221,18 @@ io.on('connection', socket => {
         let [rows] = await database.pool.query(`select * from levels where creator_id = ?`, [parseInt(PlayerID)]);
         cb(rows);
     });
+
+    // User removes level
+    socket.on("RemoveLevel", async(levelID, cb) => {
+        let [rows] = await database.pool.query(`delete from levels where id = ?`, [levelID]);
+
+        cb(rows);
+    });
+
+    // Of Online Game for all players in the lobby the background color of the game changes
+    socket.on("ChangeBGColor", async(GameID, bgcolor1, bgcolor2) => {
+        io.to(GameID).emit("GetBgcolors", bgcolor1, bgcolor2);
+    });
 });
 
 // User accepts friend request

@@ -306,21 +306,22 @@ const SaveNewLevel = async(id, levelData) => {
             levelData.levelicon, JSON.stringify(levelData.allowedpatterns), levelData.id
         ]);
 
-        console.log(rows);
-        return rows.insertId;
+        console.log(rows, levelData.id);
+        return levelData.id;
 
     } else {
+        // get current date
+        let [date] = await pool.query(`select current_date`);
 
         // write complete new level in database and generate new id
-        let [rows] = await pool.query(`insert into levels (level_status, field, level_name, creator_id, bg_music, bg1, bg2, required_points, player_timer, icon, pattern) values 
-        (?,?,?,?,?,?,?,?,?,?,?)`, [levelData.status, levelData.cellgrid, levelData.name, parseInt(id), levelData.bgmusic, levelData.bgcolor1, levelData.bgcolor2, levelData.requiredpoints, levelData.playertimer,
-            levelData.levelicon, JSON.stringify(levelData.allowedpatterns)
+        let [rows] = await pool.query(`insert into levels (level_status, field, level_name, creator_id, bg_music, bg1, bg2, required_points, player_timer, icon, pattern, creation_date) values 
+        (?,?,?,?,?,?,?,?,?,?,?,?)`, [levelData.status, levelData.cellgrid, levelData.name, parseInt(id), levelData.bgmusic, levelData.bgcolor1, levelData.bgcolor2, levelData.requiredpoints, levelData.playertimer,
+            levelData.levelicon, JSON.stringify(levelData.allowedpatterns), JSON.stringify(date[0]["current_date"])
         ]);
 
         console.log(rows);
         return rows.insertId; // unique id of the level
     };
-
 };
 
 // try to log functions
