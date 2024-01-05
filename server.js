@@ -1233,6 +1233,42 @@ io.on('connection', socket => {
     socket.on("ChangeBGColor", async(GameID, bgcolor1, bgcolor2) => {
         io.to(GameID).emit("GetBgcolors", bgcolor1, bgcolor2);
     });
+
+    // Player requests online level on search
+    socket.on("RequestOnlineLevels", async(text, cb) => {
+        let [rows] = await database.pool.query(`select * from levels where level_name = ? and CreatorBeatIt = 1 and publish_date is not null`, [text]);
+
+        cb(rows);
+    });
+
+    // User beat his own level which he created and it should be ready to publish now
+    socket.on("UserVerifiedLevel", async(level_id, cb) => {
+        await database.pool.query(`update levels set CreatorBeatIt = true where id = ?`, [level_id]); // update 
+
+        let [rows] = await database.pool.query(`select CreatorBeatIt from levels where id = ?`, [level_id]); // get new value
+        cb(rows[0]["CreatorBeatIt"]); // send to frontend
+    });
+
+    // User wants to publish level
+    socket.on("PublishLevel", async(level_id, cb) => {
+        // get current date
+        let [date] = await database.pool.query(`select current_date`);
+
+        await database.pool.query(`update levels set publish_date = ? where id = ?`, [JSON.stringify(date[0]["current_date"]), level_id]); // update 
+        await database.pool.query(`update levels set level_status = 1 where id = ?`, [level_id]); // update
+
+        let [rows] = await database.pool.query(`select level_status from levels where id = ?`, [level_id]); // get new value
+        cb(rows[0]["level_status"]); // send to frontend
+    });
+
+    // User wants to unpublish level
+    socket.on("UnpublishLevel", async(level_id, cb) => {
+        await database.pool.query(`update levels set publish_date = null where id = ?`, [level_id]); // update 
+        await database.pool.query(`update levels set level_status = 0 where id = ?`, [level_id]); // update
+
+        let [rows] = await database.pool.query(`select level_status from levels where id = ?`, [level_id]); // get new value
+        cb(rows[0]["level_status"]); // send to frontend
+    });
 });
 
 // User accepts friend request
