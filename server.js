@@ -1269,6 +1269,19 @@ io.on('connection', socket => {
         let [rows] = await database.pool.query(`select level_status from levels where id = ?`, [level_id]); // get new value
         cb(rows[0]["level_status"]); // send to frontend
     });
+
+    // User requests all online level
+    socket.on("DisplayAllOnlineLevel", async(cb) => {
+        let [rows] = await database.pool.query(`select * from levels where CreatorBeatIt = 1 and publish_date is not null and level_status = 1`);
+
+        let Players = [];
+        for (let creator_id of rows) {
+            let [player] = await database.pool.query(`select * from players where player_id = ?`, [creator_id["creator_id"]]);
+            Players.push(player);
+        };
+
+        cb(rows, Players);
+    });
 });
 
 // User accepts friend request
