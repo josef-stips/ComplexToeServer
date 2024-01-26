@@ -515,7 +515,7 @@ io.on('connection', socket => {
                         };
 
                         if (eyeAttackInterval_bool) io.to(parseInt(Data[0])).emit("EyeAttackInterval", eyeAttackInterval);
-                        io.to(parseInt(Data[0])).emit('playerTimer', player1Timer, player2Timer);
+                        io.to(parseInt(Data[0])).emit('playerTimer', player1Timer, player2Timer, currentPlayer);
                     };
                 }, 1000);
             };
@@ -1342,7 +1342,6 @@ const AcceptFriendRequest = async(RequesterID, AccepterID, cb, fromSendFriendReq
 const createID = (min, max) => { let = roomID = Math.floor(Math.random() * (max - min + 1)) + min; return roomID; };
 
 // player kills room which he created before
-// It gets killen from the costum Server Object "ServerData"
 const kill_room = async(id) => {
     // check if room exists
     let roomData = await database.pool.query(`select * from roomdata where RoomID = ?`, [id]);
