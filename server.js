@@ -11,10 +11,9 @@ const PORT = process.env.PORT || 3000;
 const { Server } = require('socket.io');
 const io = new Server(server, {
     cors: {
-        origin: ["https://admin.socket.io", "http://127.0.0.1:5500", "https://complextoeserveradmin.onrender.com"],
+        origin: ["https://admin.socket.io", "http://127.0.0.1:3000"],
         credentials: true,
     },
-    // path: "https://complextoeserveradmin.onrender.com"
 });
 
 // dev
@@ -22,7 +21,7 @@ instrument(io, {
     auth: {
         type: "basic",
         username: "admin",
-        password: "$2b$10$qoNcQaDE/Ri9B5Q40JQVHuWQV4Vzm6da8Tiwh50SIYiK/0N7CLYxG",
+        password: process.env.SOCKET_ADMIN,
     },
     mode: 'development'
 });
