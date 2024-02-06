@@ -148,20 +148,13 @@ async function StartPlayerClock(eventName, id, currPlayerTimer, currentPlayerNum
 
             ON SCHEDULE EVERY 1 SECOND STARTS '${currentDateTime.toISOString().slice(0, 19).replace('T', ' ')}' ENDS '${formattedEndDateTime.toISOString().slice(0, 19).replace('T', ' ')}'
  
-            DO
-            BEGIN
-                DECLARE current_${currPlayerTimer}_${id} INT;
+            DO BEGIN
 
-                SELECT ${currPlayerTimer} INTO current_${currPlayerTimer}_${id} FROM roomData WHERE roomID = ${id};
-
-                IF current_${currPlayerTimer}_${id} > 0 THEN
-                    UPDATE roomdata
-                    SET ${currPlayerTimer} = GREATEST(${currPlayerTimer} - 1, 0),
-                        currentPlayer = CASE WHEN ${currPlayerTimer} <= 0 THEN ${currentPlayerNumber} ELSE ${currentPlayerNumber} END
-                    WHERE RoomID = ${id};
-                ELSE
-                    DROP EVENT IF EXISTS ${eventName};
-                END IF;
+                UPDATE roomdata
+                SET ${currPlayerTimer} = GREATEST(${currPlayerTimer} - 1, 0),
+                    currentPlayer = CASE WHEN ${currPlayerTimer} <= 0 THEN ${currentPlayerNumber} ELSE ${currentPlayerNumber} END
+                WHERE RoomID = ${id};
+                
             END
         `);
     } catch (error) {
@@ -170,46 +163,6 @@ async function StartPlayerClock(eventName, id, currPlayerTimer, currentPlayerNum
         connection.release();
     };
 };
-
-async function Clock(eventName, id, currPlayerTimer, currentPlayerNumber, startDateTime, endDateTime) {
-    // ...
-
-    // Konvertieren Sie die benutzerdefinierten Start- und Enddaten in das MySQL-Datumsformat
-    const formattedStartDateTime = startDateTime.toISOString().slice(0, 19).replace('T', ' ');
-    const formattedEndDateTime = endDateTime.toISOString().slice(0, 19).replace('T', ' ');
-
-    // ...
-
-    // Erstellen Sie "interval" mit benutzerdefiniertem Start- und Enddatum
-    const connection = await pool.getConnection();
-    try {
-        await connection.query(`
-            CREATE EVENT IF NOT EXISTS ${eventName}
-            ON SCHEDULE AT '${formattedStartDateTime}' 
-            ENDS AT '${formattedEndDateTime}'
-            DO
-            BEGIN
-                DECLARE current_${currPlayerTimer}_${id} INT;
-
-                SELECT ${currPlayerTimer} INTO current_${currPlayerTimer}_${id} FROM roomData WHERE roomID = ${id};
-
-                IF current_${currPlayerTimer}_${id} > 0 THEN
-                    UPDATE roomData
-                    SET ${currPlayerTimer} = GREATEST(${currPlayerTimer} - 1, 0),
-                        currentPlayer = CASE WHEN ${currPlayerTimer} <= 0 THEN ${currentPlayerNumber} ELSE ${currentPlayerNumber} END
-                    WHERE RoomID = ${id};
-                ELSE
-                    DROP EVENT IF EXISTS ${eventName};
-                END IF;
-            END
-        `);
-    } catch (error) {
-        console.error(error);
-    } finally {
-        connection.release();
-    };
-};
-
 
 // when game gets killed: stop both player1_timer event scheduler and the second one
 async function DeletePlayerClocks(eventName1, eventName2) {

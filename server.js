@@ -420,7 +420,7 @@ io.on('connection', socket => {
                 let PlayerTimeRequestInterval = setInterval(async() => {
                     try {
                         // request player timers and the current player timer from database
-                        var results = await database.pool.query(`select player1_timer , player2_timer, currentPlayer,eyeAttackInterval from roomdata where RoomID = ?;`, [parseInt(Data[0])]);
+                        var results = await database.pool.query(`select player1_timer , player2_timer, currentPlayer,eyeAttackInterval,PlayerTimer from roomdata where RoomID = ?;`, [parseInt(Data[0])]);
                     } catch (error) {
                         console.log(error);
                     };
@@ -454,6 +454,7 @@ io.on('connection', socket => {
                         let eyeAttackInterval;
                         let eyeAttackInterval_bool = false;
                         let attack = false;
+                        let PlayerTimer;
                         // console.log(eyeAttackInterval, "eye Attack Interval")
 
                         try {
@@ -461,6 +462,9 @@ io.on('connection', socket => {
                             player2Timer = results[0][0].player2_timer;
                             currentPlayer = results[0][0].currentPlayer;
                             eyeAttackInterval = results[0][0].eyeAttackInterval;
+                            PlayerTimer = results[0][0].PlayerTimer;
+
+                            PlayerTimer--;
 
                             if (eyeAttackInterval != 1000) {
                                 eyeAttackInterval_bool = true;
@@ -481,7 +485,7 @@ io.on('connection', socket => {
                         // console.log(player1Timer, player2Timer, currentPlayer, eyeAttackInterval, eyeAttackInterval_bool);
 
                         // check if timer for first or second player ended
-                        if (currentPlayer == 2 && player2Timer <= 0) {
+                        if (currentPlayer == 2 && player2Timer <= 0 || PlayerTimer <= 0) {
                             io.to(parseInt(Data[0])).emit("EndOfPlayerTimer")
 
                             await database.DeletePlayerClocks(`player1_timer_event_${Data[0]}`, `player2_timer_event_${Data[0]}`);
@@ -493,7 +497,7 @@ io.on('connection', socket => {
 
                         };
 
-                        if (currentPlayer == 1 && player1Timer <= 0) {
+                        if (currentPlayer == 1 && player1Timer <= 0 || PlayerTimer <= 0) {
                             io.to(parseInt(Data[0])).emit("EndOfPlayerTimer")
 
                             await database.DeletePlayerClocks(`player1_timer_event_${Data[0]}`, `player2_timer_event_${Data[0]}`);
