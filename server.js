@@ -416,7 +416,7 @@ io.on('connection', socket => {
                 // start player clock for the first player
                 await database.StartPlayerClock(`player1_timer_event_${Data[0]}`, parseInt(Data[0]), "player1_timer", 1);
 
-                // send the time every second to the player so they can see how much time they haeve obviously
+                // send the time every second to the player so they can see how much time they have obviously
                 let PlayerTimeRequestInterval = setInterval(async() => {
                     try {
                         // request player timers and the current player timer from database
@@ -429,6 +429,7 @@ io.on('connection', socket => {
                         // request from database if they are still in the game
                         var result = await database.pool.query(`select isPlaying from roomdata where RoomID = ?`, [parseInt(Data[0])]);
                         var isPlaying = result[0][0].isPlaying;
+
                     } catch (error) {
                         console.log(error);
                     };
@@ -454,6 +455,7 @@ io.on('connection', socket => {
                         let eyeAttackInterval_bool = false;
                         let attack = false;
                         // console.log(eyeAttackInterval, "eye Attack Interval")
+
                         try {
                             player1Timer = results[0][0].player1_timer;
                             player2Timer = results[0][0].player2_timer;
@@ -471,12 +473,14 @@ io.on('connection', socket => {
                             // drop "interval" from database
                             await database.DeletePlayerClocks(`player1_timer_event_${Data[0]}`, `player2_timer_event_${Data[0]}`);
                             await database.stopEyeAttackInterval(`eyeAttackInterval_${Data[0]}`); // for eye boss if exists
+
                             // delete interval to stop sending messages to the client
                             clearInterval(PlayerTimeRequestInterval);
                             PlayerTimeRequestInterval = null;
                         };
                         // console.log(player1Timer, player2Timer, currentPlayer, eyeAttackInterval, eyeAttackInterval_bool);
 
+                        // check if timer for first or second player ended
                         if (currentPlayer == 2 && player2Timer <= 0) {
                             io.to(parseInt(Data[0])).emit("EndOfPlayerTimer")
 
@@ -488,6 +492,7 @@ io.on('connection', socket => {
                             // }, 1000);
 
                         };
+
                         if (currentPlayer == 1 && player1Timer <= 0) {
                             io.to(parseInt(Data[0])).emit("EndOfPlayerTimer")
 
@@ -499,11 +504,12 @@ io.on('connection', socket => {
                             // }, 1000);
                         };
 
+
+                        // for eye attack ---------------------------------------
                         if (eyeAttackInterval <= 0) {
                             attack = true;
                         } else attack = false;
 
-                        // for eye attack
                         if (eyeAttackInterval_bool && attack) {
                             eyeAttackInterval = 60;
                             attack = false;
@@ -515,7 +521,9 @@ io.on('connection', socket => {
 
                         if (eyeAttackInterval_bool) io.to(parseInt(Data[0])).emit("EyeAttackInterval", eyeAttackInterval);
                         io.to(parseInt(Data[0])).emit('playerTimer', player1Timer, player2Timer, currentPlayer);
+                        // -------------------------------------------------------
                     };
+
                 }, 1000);
             };
         } catch (error) {
@@ -523,6 +531,7 @@ io.on('connection', socket => {
         };
     });
 
+    // same cell blocker for everyone in the game room1
     function single_CellBlock(cells, cellIndex) {
         cells[cellIndex] = '§';
     };
