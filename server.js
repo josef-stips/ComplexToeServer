@@ -1231,6 +1231,7 @@ io.on('connection', socket => {
     // User requests levels that are created by him
     socket.on("RequestLevels", async(PlayerID, cb) => {
         let [rows] = await database.pool.query(`select * from levels where creator_id = ?`, [parseInt(PlayerID)]);
+        console.log(rows);
         cb(rows);
     });
 
