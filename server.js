@@ -849,7 +849,7 @@ io.on('connection', socket => {
 
     // admin calls ultimate win
     socket.on('Call_UltimateWin', (id, data) => {
-        io.to(parseInt(id)).emit('global_UltimateWin', data[0], data[1], data[2]);
+        io.to(parseInt(id)).emit('global_UltimateWin', data[0], data[1], data[2], data[3], data[4]);
     });
 
     // admin calls global game timer which all clients recieve through this emit
