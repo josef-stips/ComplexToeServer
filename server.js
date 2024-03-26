@@ -848,7 +848,11 @@ io.on('connection', socket => {
     });
 
     // admin calls ultimate win
-    socket.on('Call_UltimateWin', (id, data) => {
+    socket.on('Call_UltimateWin', async(id, data) => {
+        // stop player timer in database
+        await database.DeletePlayerClocks(`player1_timer_event_${id}`, `player2_timer_event_${id}`);
+
+        // send neccesary data to all clients in lobby
         io.to(parseInt(id)).emit('global_UltimateWin', data[0], data[1], data[2], data[3], data[4]);
     });
 
@@ -919,8 +923,8 @@ io.on('connection', socket => {
     });
 
     // when player clicks on his user profile and he has an account, all his data gets saved in database
-    socket.on("SaveAllData", async(player_name, player_icon, playerInfoClass, playerInfoColor, quote, onlineGamesWon, XP, current_used_skin, player_id) => {
-        await database.UpdateAllUserData(player_name, player_icon, playerInfoClass, playerInfoColor, quote, onlineGamesWon, XP, current_used_skin, parseInt(player_id));
+    socket.on("SaveAllData", async(player_name, player_icon, playerInfoClass, playerInfoColor, quote, onlineGamesWon, XP, current_used_skin, player_id, commonPattern) => {
+        await database.UpdateAllUserData(player_name, player_icon, playerInfoClass, playerInfoColor, quote, onlineGamesWon, XP, current_used_skin, parseInt(player_id), commonPattern);
     })
 
     // player searches an user with a name or user id

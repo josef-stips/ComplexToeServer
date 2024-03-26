@@ -286,9 +286,9 @@ const NewPlayerProfileQuote = async(quote, player_id) => {
 };
 
 // Update all user data to database as quick fix
-const UpdateAllUserData = async(player_name, player_icon, playerInfoClass, playerInfoColor, quote, onlineGamesWon, XP, current_used_skin, player_id) => {
+const UpdateAllUserData = async(player_name, player_icon, playerInfoClass, playerInfoColor, quote, onlineGamesWon, XP, current_used_skin, player_id, commonPattern) => {
     await pool.query(`update players set player_name = ?, player_icon = ?, playerInfoClass = ?, playerInfoColor = ?, quote = ?, onlineGamesWon = ?, 
-    XP = ?, currentUsedSkin = ? where player_id = ?`, [player_name, player_icon, playerInfoClass, playerInfoColor, quote, onlineGamesWon, XP, current_used_skin, player_id]);
+    XP = ?, currentUsedSkin = ?, commonPattern = ? where player_id = ?`, [player_name, player_icon, playerInfoClass, playerInfoColor, quote, onlineGamesWon, XP, current_used_skin, commonPattern, player_id]);
 };
 
 // search a player in player table with an id or name
