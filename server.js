@@ -1289,6 +1289,7 @@ io.on('connection', socket => {
     socket.on("UnpublishLevel", async(level_id, cb) => {
         await database.pool.query(`update levels set publish_date = null where id = ?`, [level_id]); // update 
         await database.pool.query(`update levels set level_status = 0 where id = ?`, [level_id]); // update
+        await database.pool.query(`update levels set CreatorBeatIt = 0 where id = ?`, [level_id]); // update
 
         let [rows] = await database.pool.query(`select level_status from levels where id = ?`, [level_id]); // get new value
         cb(rows[0]["level_status"]); // send to frontend
