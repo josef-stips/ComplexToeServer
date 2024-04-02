@@ -136,8 +136,8 @@ async function StartPlayerClock(eventName, id, currPlayerTimer, currentPlayerNum
     let formattedEndDateTime = new Date();
     formattedEndDateTime.setSeconds(formattedEndDateTime.getSeconds() + MaxTimerValue);
 
-    currentDateTime.setHours(currentDateTime.getHours() + 1);
-    formattedEndDateTime.setHours(formattedEndDateTime.getHours() + 1);
+    currentDateTime.setHours(currentDateTime.getHours() + 2);
+    formattedEndDateTime.setHours(formattedEndDateTime.getHours() + 2);
 
     // Ausgabe von Start- und Endzeit
     console.log(currentDateTime.toISOString().slice(0, 19).replace('T', ' '), formattedEndDateTime.toISOString().slice(0, 19).replace('T', ' '));

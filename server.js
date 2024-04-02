@@ -243,12 +243,14 @@ io.on('connection', socket => {
                     let result4 = await database.pool.query(`select InnerGameMode from roomdata where RoomID = ?`, [parseInt(GameID)]);
                     let result5 = await database.pool.query(`select player3_name from roomdata where RoomID = ?`, [parseInt(GameID)]);
                     let result6 = await database.pool.query(`select player2_name from roomdata where RoomID = ?`, [parseInt(GameID)]);
+                    let [result7] = await database.pool.query(`select costumField from roomdata where RoomID = ?`, [parseInt(GameID)]);
 
                     let FieldSize = result2[0][0].xyCellAmount;
                     let PlayerTimer = result3[0][0].PlayerTimer;
                     let InnerGameMode = result4[0][0].InnerGameMode;
                     let Player3Name = result5[0][0].player3_name;
                     let Player2Name = result6[0][0].player2_name;
+                    let costumField = result7[0].costumField;
 
                     // callback to client who wants to join:
 
@@ -256,11 +258,11 @@ io.on('connection', socket => {
                     if (io.sockets.adapter.rooms.get(parseInt(GameID)).size == 3 && thirdPlayer == 1 &&
                         Player3Name == '' && Player2Name != '') {
                         // send data to client who joined
-                        callback(['room exists', GameID, FieldSize, PlayerTimer, InnerGameMode, "thirdplayer"]);
+                        callback(['room exists', GameID, FieldSize, PlayerTimer, InnerGameMode, "thirdplayer", costumField]);
 
                     } else { // if there are only 2 player in the lobby or a third player is not allowed or there is a third player but not a second player
                         // send data to client who joined
-                        callback(['room exists', GameID, FieldSize, PlayerTimer, InnerGameMode, "secondplayer"]);
+                        callback(['room exists', GameID, FieldSize, PlayerTimer, InnerGameMode, "secondplayer", costumField]);
                     };
 
                 } else { // room is full
@@ -420,7 +422,8 @@ io.on('connection', socket => {
                 let PlayerTimeRequestInterval = setInterval(async() => {
                     try {
                         // request player timers and the current player timer from database
-                        var results = await database.pool.query(`select player1_timer , player2_timer, currentPlayer,eyeAttackInterval,PlayerTimer from roomdata where RoomID = ?;`, [parseInt(Data[0])]);
+                        var results = await database.pool.query(`select player1_timer , player2_timer, currentPlayer, eyeAttackInterval, PlayerTimer from roomdata where RoomID = ?;`, [parseInt(Data[0])]);
+
                     } catch (error) {
                         console.log(error);
                     };
