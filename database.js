@@ -139,12 +139,13 @@ async function StartPlayerClock(eventName, id, currPlayerTimer, currentPlayerNum
     currentDateTime.setHours(currentDateTime.getHours() + 2);
     formattedEndDateTime.setHours(formattedEndDateTime.getHours() + 2);
 
-    // Ausgabe von Start- und Endzeit
-    console.log(currentDateTime.toISOString().slice(0, 19).replace('T', ' '), formattedEndDateTime.toISOString().slice(0, 19).replace('T', ' '));
-
     // create "interval"
     const connection = await pool.getConnection();
+
     try {
+        // Ausgabe von Start- und Endzeit
+        console.log(currentDateTime.toISOString().slice(0, 19).replace('T', ' '), formattedEndDateTime.toISOString().slice(0, 19).replace('T', ' '));
+
         await connection.query(`
             CREATE EVENT IF NOT EXISTS ${eventName}
 

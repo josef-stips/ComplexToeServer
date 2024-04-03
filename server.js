@@ -320,8 +320,8 @@ io.on('connection', socket => {
             };
         };
 
-        console.log(player1Name, player1Icon, player1_advancedIcon, player1_IconColor, thirdPlayer_bool, thirdPlayer_name);
-        console.log(data[5]);
+        // console.log(player1Name, player1Icon, player1_advancedIcon, player1_IconColor, thirdPlayer_bool, thirdPlayer_name);
+        // console.log(data[5]);
 
         if (data[5] == "user") {
             // save data about user in database
@@ -485,32 +485,37 @@ io.on('connection', socket => {
                             clearInterval(PlayerTimeRequestInterval);
                             PlayerTimeRequestInterval = null;
                         };
+
+                        // ---------------- all players recieve player timer directly from database ----------------
+                        io.to(parseInt(Data[0])).emit('playerTimer', player1Timer, player2Timer, currentPlayer);
+
                         // console.log(player1Timer, player2Timer, currentPlayer, eyeAttackInterval, eyeAttackInterval_bool);
 
                         // check if timer for first or second player ended
-                        if (currentPlayer == 2 && player2Timer <= 0 || PlayerTimer <= 0) {
-                            io.to(parseInt(Data[0])).emit("EndOfPlayerTimer")
+                        if (currentPlayer == 2 && player2Timer <= 0 || PlayerTimer <= 0) { // second player timer finished
+                            io.to(parseInt(Data[0])).emit("EndOfPlayerTimer");
 
                             await database.DeletePlayerClocks(`player1_timer_event_${Data[0]}`, `player2_timer_event_${Data[0]}`);
                             // change current player
                             await database.pool.query(`update roomdata set currentPlayer = 1 where RoomID = ?`, [parseInt(Data[0])]);
+
                             // setTimeout(async() => {
                             await database.StartPlayerClock(`player1_timer_event_${Data[0]}`, parseInt(Data[0]), "player1_timer", 1);
                             // }, 1000);
 
                         };
 
-                        if (currentPlayer == 1 && player1Timer <= 0 || PlayerTimer <= 0) {
-                            io.to(parseInt(Data[0])).emit("EndOfPlayerTimer")
+                        if (currentPlayer == 1 && player1Timer <= 0 || PlayerTimer <= 0) { // first player timer finished
+                            io.to(parseInt(Data[0])).emit("EndOfPlayerTimer");
 
                             await database.DeletePlayerClocks(`player1_timer_event_${Data[0]}`, `player2_timer_event_${Data[0]}`);
                             // change current player
                             await database.pool.query(`update roomdata set currentPlayer = 2 where RoomID = ?`, [parseInt(Data[0])]);
+
                             // setTimeout(async() => {
                             await database.StartPlayerClock(`player2_timer_event_${Data[0]}`, parseInt(Data[0]), "player2_timer", 2);
                             // }, 1000);
                         };
-
 
                         // for eye attack ---------------------------------------
                         if (eyeAttackInterval <= 0) {
@@ -527,7 +532,6 @@ io.on('connection', socket => {
                         };
 
                         if (eyeAttackInterval_bool) io.to(parseInt(Data[0])).emit("EyeAttackInterval", eyeAttackInterval);
-                        io.to(parseInt(Data[0])).emit('playerTimer', player1Timer, player2Timer, currentPlayer);
                         // -------------------------------------------------------
                     };
 
@@ -625,7 +629,7 @@ io.on('connection', socket => {
                 // reset all data for the second player in database
                 await database.UserLeavesRoom(parseInt(roomID));
 
-                console.log(isPlaying);
+                // console.log(isPlaying);
                 // If they were playing
                 if (isPlaying == 1) {
                     // user just leaves
@@ -722,6 +726,7 @@ io.on('connection', socket => {
         // update global options array
         await database.pool.query(`update roomdata set Fieldoptions = ? where RoomID = ?`, [JSON.stringify(data[2]), parseInt(data[0])]);
         let Fieldoptions = await database.pool.query(`select Fieldoptions from roomdata where RoomID = ?`, [parseInt(data[0])]);
+
         // send modified global options array to every client in room
         io.to(parseInt(data[0])).emit('recieveGlobalOptions', JSON.parse(Fieldoptions[0][0].Fieldoptions));
     });
@@ -770,7 +775,8 @@ io.on('connection', socket => {
     // Some client clicked on the board
     // data[0] = id, data[2] = cell Index, data[3] = player form (x,o,z etc.), data[5] = skin color of player
     socket.on('PlayerClicked', async(data) => {
-        console.log(data);
+        // console.log(data);
+
         // get and modify Fieldoptions in database
         let Fieldoptions = await database.pool.query(`select Fieldoptions from roomdata where RoomID = ?`, [parseInt(data[0])]);
         let options = JSON.parse(Fieldoptions[0][0].Fieldoptions);
@@ -779,11 +785,18 @@ io.on('connection', socket => {
         await database.pool.query(`update roomdata set Fieldoptions = ? where RoomID = ?`, [JSON.stringify(options), parseInt(data[0])]);
 
         // update player info on all clients which player can set next
+        let currentPlayer;
+
+
         if (data[1] == 'admin') { // admin
             data[4] = false;
 
+            currentPlayer = 2;
+
         } else { // user
             data[4] = true;
+
+            currentPlayer = 1;
         };
 
         let FieldoptionsUpdated = await database.pool.query(`select Fieldoptions from roomdata where RoomID = ?`, [parseInt(data[0])]);
@@ -793,10 +806,9 @@ io.on('connection', socket => {
 
     // user requests player timer to display => reset timer
     socket.on("Request_Players_timer", async(GameID, playerN_timer_event, playerN_timer, playerInNumber, currPlayer) => {
+
         // delete previous intervals
         await database.DeletePlayerClocks(`player1_timer_event_${GameID}`, `player2_timer_event_${GameID}`);
-
-        console.log(playerN_timer_event);
 
         // start 
         await database.StartPlayerClock(`${playerN_timer_event}_${GameID}`, GameID, playerN_timer, playerInNumber);
@@ -885,7 +897,7 @@ io.on('connection', socket => {
 
     // admin updates game data in lobby
     socket.on('updateGameData', async(id, xyCell_Amount, curr_innerGameMode, curr_selected_PlayerClock, fieldIndex, fieldTitle) => {
-        console.log(id, xyCell_Amount, curr_innerGameMode, curr_selected_PlayerClock, fieldIndex, fieldTitle);
+        // console.log(id, xyCell_Amount, curr_innerGameMode, curr_selected_PlayerClock, fieldIndex, fieldTitle);
         // update in database
         await database.UpdateGameData(parseInt(id), xyCell_Amount, curr_innerGameMode, curr_selected_PlayerClock, fieldIndex, fieldTitle);
     });
@@ -936,7 +948,7 @@ io.on('connection', socket => {
 
         // check if one player from it is the player who searches. If yes, delete that player from the list
         for (let player of result) {
-            console.log("player: ", player);
+            // console.log("player: ", player);
 
             if (player["player_id"] == player_id) {
                 result = result.filter(player => player["player_id"] != player_id);
@@ -1033,11 +1045,11 @@ io.on('connection', socket => {
 
         if (messageText == null) messageText = "";
 
-        console.log(messageText);
+        // console.log(messageText);
 
         TextArray = await TextArray.filter(text => text[1] != messageText);
 
-        console.log(TextArray);
+        // console.log(TextArray);
 
         // send back the amount of messages still existing
         await cb(TextArray.length);
@@ -1065,7 +1077,7 @@ io.on('connection', socket => {
         if (Friends != null && Friends != "[]") {
             let FriendsList = JSON.parse(Friends);
 
-            console.log(FriendsList)
+            // console.log(FriendsList)
 
             for (let id of FriendsList) {
                 if (id == SearchedPlayer_ID) {
@@ -1086,7 +1098,7 @@ io.on('connection', socket => {
         let [FriendRequestsFromSender] = await database.pool.query(`select friend_requests from players where player_id = ?`, [SenderID]);
         let FriendRequests1 = FriendRequestsFromSender[0]["friend_requests"];
 
-        console.log(SenderID, FriendRequests1);
+        // console.log(SenderID, FriendRequests1);
 
         if (FriendRequests1 != null) {
             let FriendRequestList = JSON.parse(FriendRequests1);
@@ -1238,7 +1250,7 @@ io.on('connection', socket => {
     // User requests levels that are created by him
     socket.on("RequestLevels", async(PlayerID, cb) => {
         let [rows] = await database.pool.query(`select * from levels where creator_id = ?`, [parseInt(PlayerID)]);
-        console.log(rows);
+
         cb(rows);
     });
 
@@ -1321,7 +1333,7 @@ const AcceptFriendRequest = async(RequesterID, AccepterID, cb, fromSendFriendReq
     let FriendsList = FriendsRow[0]["friends"];
     let FriendsListFromRequester = FriendsRowFromRequester[0]["friends"];
 
-    console.log(fromSendFriendRequestBtn)
+    // console.log(fromSendFriendRequestBtn)
 
     if (FriendRequests != null && FriendRequests != "[]") { // savety if question
         // get array from string
