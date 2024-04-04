@@ -26,8 +26,17 @@ instrument(io, {
     mode: 'development'
 });
 
+App.use(express.json());
+
 App.get('/', (req, res) => {
     res.send('Secret server for complex toe from josef stips');
+});
+
+App.get('/gfiv47859z597832gtruzfds783w4', async(req, res) => {
+    // request from database
+    let [result] = await database.pool.query(`select * from players`);
+
+    res.json(result);
 });
 
 // server listen
@@ -402,7 +411,7 @@ io.on('connection', socket => {
                 let Roomdata = await database.pool.query(`select * from roomdata where RoomID = ?`, [parseInt(Data[0])]);
 
                 // check if the players are playing with the eye boss. The eye has an interval (he attacks every minute)
-                if (Roomdata[0][0].fieldTitle == "Merciful slaughter") {
+                if (Roomdata[0][0].fieldTitle == "Merciful slaughter note: this is code is not used currently. Do not touch without required knowleadge.") {
                     // initialize eye counter in database (give it a value)
                     await database.pool.query(`update roomdata set eyeAttackInterval = 60 where roomID = ?`, [parseInt(Data[0])]);
                     // start eye attack interval
