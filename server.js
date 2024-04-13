@@ -211,7 +211,7 @@ io.on('connection', socket => {
             // create room in database with given data
             await database.CreateRoom(parseInt(roomID), parseInt(GameData[2]), GameData[1], parseInt(GameData[0]), JSON.stringify([]), 0, false, parseInt(GameData[5]), GameData[6],
                 GameData[9], GameData[10], JSON.stringify(GameData[11]), 1, GameData[3], "", "", GameData[4], "", "admin", "user", "blocker",
-                socket.id, "", "", GameData[7], "", GameData[8], "", parseInt(GameData[0]), parseInt(GameData[0]), 1, GameData[12], GameData[13], GameData[14]);
+                socket.id, "", "", GameData[7], "", GameData[8], "", parseInt(GameData[0]), parseInt(GameData[0]), 1, GameData[12], GameData[13], GameData[14], GameData[15]);
 
             // Inform and update the page of all other people who are clients of the room about the name of the admin
             io.to(roomID).emit('Admin_Created_And_Joined', [GameData[3], GameData[4], GameData[7], GameData[9]]); // PlayerData[9] = third player as boolean
@@ -832,13 +832,18 @@ io.on('connection', socket => {
     });
 
     // Bug fix for the single_CellBlock function in the checkWinner function when Player sets his form
-    socket.on('resetOptions', async(id, xyCellAmount, cb) => {
-        await database.pool.query(`update roomdata set Fieldoptions = "" where RoomID = ?`, [parseInt(id)]); // reset
-
+    socket.on('resetOptions', async(id, xyCellAmount, killAllDrawnCells, WinCombination, optionsFromClient, cb) => {
         // create options
         let options = [];
-        for (i = 0; i < xyCellAmount * xyCellAmount; i++) { // Data[1] = xyCell_Amount , 5, 10, 15, 20 etc.
-            options.push("");
+
+        console.log(killAllDrawnCells, WinCombination, options);
+
+        if (killAllDrawnCells) {
+            options = new Array(xyCellAmount * xyCellAmount).fill("");
+
+        } else {
+            WinCombination.forEach(index => optionsFromClient[index] = "");
+            options = optionsFromClient;
         };
 
         // update global Fieldoptions variable in database
