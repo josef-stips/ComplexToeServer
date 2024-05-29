@@ -64,6 +64,7 @@ io.on('connection', socket => {
                 io.to(socket.id).emit('availible-treasure');
 
             } else {
+
                 // Treasure is not open, interval is not over
                 // send timestamp to client so it knows when the treasure is open
                 let datetime = await database.getTreasure_TimeStamp(parseInt(PlayerID));
@@ -1218,6 +1219,12 @@ io.on('connection', socket => {
         cb(Name);
     });
 
+    // get player data by its id
+    socket.on("GetDataByID", async(id, cb) => {
+        let [row] = await database.pool.query(`select * from players where player_id = ?`, [id]);
+        cb(row[0]);
+    });
+
     // user wants to remove friend from friends list
     socket.on("DeleteFriend", async(PlayerID, FriendID, cb) => {
         let [PlayerFriendsRow] = await database.pool.query(`select friends from players where player_id = ?`, [PlayerID]); // get friends list
@@ -1335,6 +1342,36 @@ io.on('connection', socket => {
         };
 
         cb(rows, Players);
+    });
+
+    // user searches for clans
+    socket.on("clan_search", async(query, cb) => {
+        let [result] = await database.pool.query(`select * from clans where name = ?`, [query]);
+
+        cb(result);
+    });
+
+    // automatic: user gets a proposal of popular clans
+    socket.on("popular_clans", async(cb) => {
+        let [rows] = await database.pool.query(`select * from clans`);
+
+        cb(rows);
+    });
+
+    socket.on("join_clan", async(player_id, cb) => {
+
+    });
+
+    socket.on("leave_clan", async(player_id, cb) => {
+
+    });
+
+    socket.on("kick_member", async(member_id, clan_id) => {
+
+    });
+
+    socket.on("promote_member", async(member_id, clan_id) => {
+
     });
 });
 
