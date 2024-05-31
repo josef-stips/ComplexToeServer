@@ -253,9 +253,9 @@ async function FindRoomBySocketID(socketID) {
     let results2 = await pool.query(`select * from roomdata where player2_socketID = ?`, [socketID]);
     let results3 = await pool.query(`select * from roomdata where player3_socketID = ?`, [socketID]);
 
-    console.log(results1);
-    console.log(results2);
-    console.log(results3);
+    // console.log(results1);
+    // console.log(results2);
+    // console.log(results3);
 
     if (results1[0].length > 0) { // socket is admin in a room
         let roomData = results1[0][0];
@@ -337,6 +337,44 @@ const SaveNewLevel = async(id, levelData) => {
     };
 };
 
+
+// create new clan
+const CreateClan = async(clan_name, clan_logo, clan_description, player_data, cb) => {
+    console.log(clan_name, clan_logo, clan_description, player_data);
+
+    let query = `
+    insert into clans (level, name, logo, members, admin, field, XP, description) values (
+        1,
+        ?,
+        ?,
+        json_object(
+            ?, json_object(
+                'name', ?,
+                'clan_id', 0,
+                'role', 'admin',
+                'position', json_object('x', 0, 'y', 0),
+                'XP', ?
+            )
+        ),
+        json_object('id', ?,'clan_id', 0, 'name', ?, 'role', 'admin'),
+        1,
+        ?,
+        ?
+    );`;
+
+    let [rows] = await pool.query(query, [
+        clan_name, clan_logo, player_data["player_id"],
+        player_data["player_name"],
+        player_data["XP"],
+        player_data["player_id"],
+        player_data["player_name"],
+        player_data["XP"],
+        clan_description
+    ]);
+
+    return [rows["serverStatus"], rows["insertId"]];
+};
+
 // try to log functions
 async function main() {
     try {
@@ -375,5 +413,6 @@ module.exports = {
     NewPlayerProfileQuote: NewPlayerProfileQuote,
     UpdateAllUserData: UpdateAllUserData,
     SearchPlayers: SearchPlayers,
-    SaveNewLevel
+    SaveNewLevel,
+    CreateClan
 };

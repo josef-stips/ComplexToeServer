@@ -207,7 +207,7 @@ io.on('connection', socket => {
         if (result[0].length == 0) {
             // join room as admin because your the creator
             socket.join(roomID);
-            console.log(roomID);
+            // console.log(roomID);
 
             // create room in database with given data
             await database.CreateRoom(parseInt(roomID), parseInt(GameData[2]), GameData[1], parseInt(GameData[0]), JSON.stringify([]), 0, false, parseInt(GameData[5]), GameData[6],
@@ -837,7 +837,7 @@ io.on('connection', socket => {
         // create options
         let options = [];
 
-        console.log(killAllDrawnCells, WinCombination, options);
+        // console.log(killAllDrawnCells, WinCombination, options);
 
         if (killAllDrawnCells) {
             options = new Array(xyCellAmount * xyCellAmount).fill("");
@@ -1372,6 +1372,24 @@ io.on('connection', socket => {
 
     socket.on("promote_member", async(member_id, clan_id) => {
 
+    });
+
+    socket.on("create_clan", async(clan_name, clan_logo, clan_description, player_id, cb) => {
+        let [row] = await database.pool.query(`select * from players where player_id = ?`, [player_id]);
+        let [serverStatus, insertId] = await database.CreateClan(clan_name, clan_logo, clan_description, row[0], cb);
+
+        if (serverStatus == 2) {
+            let [rows] = await database.pool.query(`select * from clans where id = ?`, [insertId]);
+            cb(rows[0]);
+
+        } else {
+            cb(null);
+        };
+    });
+
+    socket.on("get_clan_data", async(clan_id, cb) => {
+        let [row] = await database.pool.query(`select * from clans where id = ?`, [clan_id]);
+        cb(row[0]);
     });
 });
 
