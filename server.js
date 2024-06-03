@@ -1,5 +1,7 @@
 const { instrument } = require('@socket.io/admin-ui');
 const database = require("./database");
+const crypto = require('crypto');
+const moment = require('moment');
 
 const http = require('http');
 const express = require('express');
@@ -7,8 +9,8 @@ const express = require('express');
 const App = express();
 const server = http.createServer(App);
 const PORT = process.env.PORT || 3000;
-
 const { Server } = require('socket.io');
+
 const io = new Server(server, {
     cors: {
         origin: ["https://admin.socket.io", "http://127.0.0.1:3000"],
@@ -18,15 +20,17 @@ const io = new Server(server, {
 
 // dev
 instrument(io, {
-    auth: {
-        type: "basic",
-        username: "admin",
-        password: process.env.SOCKET_ADMIN,
-    },
+    // auth: {
+    //     type: "basic",
+    //     username: "admin",
+    //     password: process.env.SOCKET_ADMIN,
+    // },
+    auth: false,
     mode: 'development'
 });
 
 App.use(express.json());
+App.use(express.static('./node_modules/@socket.io/admin-ui/ui/dist'));
 
 App.get('/', (req, res) => {
     res.send('Secret server for complex toe from josef stips');
@@ -1221,8 +1225,7 @@ io.on('connection', socket => {
 
     // get player data by its id
     socket.on("GetDataByID", async(id, cb) => {
-        let [row] = await database.pool.query(`select * from players where player_id = ?`, [id]);
-        cb(row[0]);
+        cb(await getDataById(id));
     });
 
     // user wants to remove friend from friends list
@@ -1375,8 +1378,10 @@ io.on('connection', socket => {
     });
 
     socket.on("create_clan", async(clan_name, clan_logo, clan_description, player_id, cb) => {
+        let hash = create_hash_id(clan_name);
+
         let [row] = await database.pool.query(`select * from players where player_id = ?`, [player_id]);
-        let [serverStatus, insertId] = await database.CreateClan(clan_name, clan_logo, clan_description, row[0], cb);
+        let [serverStatus, insertId] = await database.CreateClan(clan_name, clan_logo, clan_description, row[0], hash, cb);
 
         if (serverStatus == 2) {
             let [rows] = await database.pool.query(`select * from clans where id = ?`, [insertId]);
@@ -1388,8 +1393,37 @@ io.on('connection', socket => {
     });
 
     socket.on("get_clan_data", async(clan_id, cb) => {
+        console.log(clan_id);
         let [row] = await database.pool.query(`select * from clans where id = ?`, [clan_id]);
         cb(row[0]);
+    });
+
+    socket.on("playground_player_moves", (player_id, coords) => {});
+
+    socket.on("pass_clan_message", async(text, player_id, clan_id, cb) => {
+        console.log(text, player_id, clan_id);
+
+        let [results] = await database.pool.query('SELECT * FROM clans WHERE id = ?', [clan_id]);
+        let chat = results[0].chat;
+        let author_role = results[0].members[player_id]["role"];
+
+        const newMessage = {
+            message: text,
+            from: player_id,
+            date: moment(new Date()).format('MMMM D, YYYY, h:mm A'),
+            role: author_role
+        };
+
+        if (chat === null) chat = [];
+        chat.push(newMessage);
+
+        let [ResultSetHeader] = await database.pool.query(`update clans set chat = ? where id = ?`, [
+            JSON.stringify(chat), clan_id
+        ]);
+
+
+        let player_data = await getDataById(player_id);
+        cb(chat, player_data, author_role);
     });
 });
 
@@ -1460,4 +1494,19 @@ const kill_room = async(id) => {
         // delete room from database
         database.DeleteRoom(parseInt(id));
     };
+};
+
+// create hash id number
+const create_hash_id = (text) => {
+    let hash = crypto.createHash('sha256');
+    hash.update(text);
+    hash = hash.digest('hex');
+
+    return hash;
+};
+
+// get all players data by its db id
+const getDataById = async(id) => {
+    let [row] = await database.pool.query(`select * from players where player_id = ?`, [id]);
+    return row[0];
 };

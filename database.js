@@ -339,40 +339,47 @@ const SaveNewLevel = async(id, levelData) => {
 
 
 // create new clan
-const CreateClan = async(clan_name, clan_logo, clan_description, player_data, cb) => {
+const CreateClan = async(clan_name, clan_logo, clan_description, player_data, clan_room_id, cb) => {
     console.log(clan_name, clan_logo, clan_description, player_data);
 
-    let query = `
-    insert into clans (level, name, logo, members, admin, field, XP, description) values (
-        1,
-        ?,
-        ?,
-        json_object(
-            ?, json_object(
-                'name', ?,
-                'clan_id', 0,
-                'role', 'admin',
-                'position', json_object('x', 0, 'y', 0),
-                'XP', ?
-            )
-        ),
-        json_object('id', ?,'clan_id', 0, 'name', ?, 'role', 'admin'),
-        1,
-        ?,
-        ?
-    );`;
+    try {
+        let query = `
+        insert into clans (level, name, logo, members, admin, field, XP, description, room_id) values (
+            1,
+            ?,
+            ?,
+            json_object(
+                ?, json_object(
+                    'name', ?,
+                    'clan_id', 0,
+                    'role', 'admin',
+                    'position', json_object('x', 0, 'y', 0),
+                    'XP', ?
+                )
+            ),
+            json_object('id', ?,'clan_id', 0, 'name', ?, 'role', 'admin'),
+            1,
+            ?,
+            ?,
+            ?
+        );`;
 
-    let [rows] = await pool.query(query, [
-        clan_name, clan_logo, player_data["player_id"],
-        player_data["player_name"],
-        player_data["XP"],
-        player_data["player_id"],
-        player_data["player_name"],
-        player_data["XP"],
-        clan_description
-    ]);
+        let [rows] = await pool.query(query, [
+            clan_name, clan_logo, player_data["player_id"],
+            player_data["player_name"],
+            player_data["XP"],
+            player_data["player_id"],
+            player_data["player_name"],
+            player_data["XP"],
+            clan_description,
+            clan_room_id
+        ]);
 
-    return [rows["serverStatus"], rows["insertId"]];
+        return [rows["serverStatus"], rows["insertId"]];
+
+    } catch (error) {
+        console.log(error);
+    };
 };
 
 // try to log functions
