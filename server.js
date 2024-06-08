@@ -1425,6 +1425,23 @@ io.on('connection', socket => {
         let player_data = await getDataById(player_id);
         cb(chat, player_data, author_role);
     });
+
+    socket.on("check_personal_data_for_level_x", async(player_id, level_id, cb) => {
+        let [result] = await database.pool.query(`select player_levels_played from players where player_id = ?`, [player_id]);
+
+        // {
+        // 846: {
+
+        //     points_made: 3,
+        //     beat: false,
+        //     beat_date: null,
+        //     like: true,
+        //     comments: [{text: "comment 1",date: "juni 24"}]
+        //     }
+        // };
+
+        cb(result[0]["player_levels_played"]);
+    });
 });
 
 // User accepts friend request
