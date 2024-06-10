@@ -1421,7 +1421,6 @@ io.on('connection', socket => {
             JSON.stringify(chat), clan_id
         ]);
 
-
         let player_data = await getDataById(player_id);
         cb(chat, player_data, author_role);
     });
@@ -1429,20 +1428,118 @@ io.on('connection', socket => {
     socket.on("check_personal_data_for_level_x", async(player_id, level_id, cb) => {
         let [result] = await database.pool.query(`select player_levels_played from players where player_id = ?`, [player_id]);
 
-        // {
-        // 846: {
-
-        //     points_made: 3,
-        //     beat: false,
-        //     beat_date: null,
-        //     like: true,
-        //     comments: [{text: "comment 1",date: "juni 24"}]
-        //     }
-        // };
-
         cb(result[0]["player_levels_played"]);
     });
+
+    socket.on("alter_personal_data_for_level_x", async(player_id, level_id, points_made, beat, like, cb) => {});
+
+    socket.on("submit_comment_to_level", async(text, level_id, player_id, player_name, player_points, cb) => {
+        let query = `
+            insert into level_comments (level_id, player_id, player_points, 
+                comment_text, player_name
+            ) values (
+
+                ?,
+                ?,
+                ?,
+                ?,
+                ?
+            )
+        `;
+
+        let [result] = await database.pool.query(query, [level_id, player_id, player_points, text, player_name]);
+
+        let insertedComment = {
+            comment_id: result.insertId,
+            level_id,
+            player_id,
+            player_points,
+            comment_text: text,
+            comment_date: new Date(),
+            player_name
+        };
+        cb(insertedComment);
+    });
+
+    socket.on("like_level_comment", async(level_id, player_id, comment_id) => {
+        player_reacts_to_comment_under_a_level(1, true, level_id, player_id, comment_id, "like");
+    });
+
+    socket.on("dislike_level_comment", async(level_id, player_id, comment_id) => {
+        player_reacts_to_comment_under_a_level(1, false, level_id, player_id, comment_id, "dislike");
+    });
+
+    socket.on("unlike_level_comment", async(level_id, player_id, comment_id) => {
+        player_reacts_to_comment_under_a_level(-1, null, level_id, player_id, comment_id, "like");
+    });
+
+    socket.on("undislike_level_comment", async(level_id, player_id, comment_id) => {
+        player_reacts_to_comment_under_a_level(-1, null, level_id, player_id, comment_id, "dislike");
+    });
+
+    socket.on("load_comments", async(level_id, player_id, cb) => {
+        let [results] = await database.pool.query(`select * from level_comments where level_id = ?`, [level_id]);
+        let [results2] = await database.pool.query(`select comment_reactions from players_level_data where 
+        player_id = ? and level_id = ?`, [player_id, level_id]);
+
+        let value;
+
+        if (results2[0]) {
+            cb(results, results2[0].comment_reactions);
+
+        } else {
+            cb(results, null);
+        };
+    });
 });
+
+// player reacts to comment under a level
+const player_reacts_to_comment_under_a_level = async(operation_type, bool_type, level_id, player_id, comment_id, reaction_type) => {
+
+    console.log("lol: ", operation_type, bool_type, level_id, player_id, comment_id, reaction_type);
+
+    if (reaction_type == "like") {
+        await database.pool.query(`update level_comments set likes = likes + ? where comment_id = ?`, [operation_type, comment_id]);
+
+    } else if (reaction_type == "dislike") {
+
+        await database.pool.query(`update level_comments set dislikes = dislikes + ? where comment_id = ?`, [operation_type, comment_id]);
+    };
+
+    let personal_data = await has_player_personal_level_data(player_id, level_id);
+
+    if (personal_data.length <= 0) {
+
+        let query = `
+            insert into players_level_data (level_id, player_id, comment_reactions) values (
+
+                ?,
+                ?,
+                json_object(?, ?)
+            );
+        `;
+
+        await database.pool.query(query, [level_id, player_id, comment_id, bool_type]);
+
+    } else {
+
+        let [result] = await database.pool.query(`select comment_reactions from players_level_data where player_id = ? and level_id = ?`, [player_id, level_id]);
+
+        console.log(result);
+        result[0].comment_reactions[comment_id] = bool_type;
+
+        await database.pool.query(`update players_level_data set comment_reactions = ? where level_id = ? and player_id = ?`, [JSON.stringify(result[0].comment_reactions), level_id, player_id]);
+    };
+};
+
+// if player has no personal data saved to this online level, create row.
+const has_player_personal_level_data = async(player_id, level_id) => {
+    let [result] = await database.pool.query(`select * from players_level_data where player_id = ? and level_id = ?`, [player_id, level_id]);
+
+    console.log(result);
+
+    return result;
+};
 
 // User accepts friend request
 const AcceptFriendRequest = async(RequesterID, AccepterID, cb, fromSendFriendRequestBtn) => {
