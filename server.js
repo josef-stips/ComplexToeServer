@@ -1426,9 +1426,22 @@ io.on('connection', socket => {
     });
 
     socket.on("check_personal_data_for_level_x", async(player_id, level_id, cb) => {
-        let [result] = await database.pool.query(`select player_levels_played from players where player_id = ?`, [player_id]);
+        let [result] = await database.pool.query(`select * from players_level_data where player_id = ? and level_id = ?`, [player_id, level_id]);
 
-        cb(result[0]["player_levels_played"]);
+        let rows = result[0];
+
+        if (rows == null) {
+
+            await database.pool.query(`insert into players_level_data (
+                level_id, player_id) values (?,?)
+            `, [level_id, player_id]);
+
+            rows = await database.pool.query(`select * from players_level_data where player_id = ? and level_id = ?`, [player_id, level_id]);
+        };
+
+        let [result2] = await database.pool.query(`select * from levels where id = ?`, [level_id]);
+
+        cb(rows, result2[0]);
     });
 
     socket.on("alter_personal_data_for_level_x", async(player_id, level_id, points_made, beat, like, cb) => {});
@@ -1441,7 +1454,7 @@ io.on('connection', socket => {
 
                 ?,
                 ?,
-                ?,
+                ?,<
                 ?,
                 ?
             )
@@ -1491,6 +1504,77 @@ io.on('connection', socket => {
             cb(results, null);
         };
     });
+
+    socket.on("update_online_level_data", async(won, time, points, player_id, level_id, cb) => {
+        let [result] = await database.pool.query(`select points_made, best_time, beat, beat_date from players_level_data 
+        where player_id = ? and level_id = ?`, [player_id, level_id]);
+
+        let data = result[0];
+        let newData = {
+            points: null,
+            best_time: null,
+            beat: null,
+            beat_date: null
+        };
+
+        // console.log(won, time, points);
+        // console.log(data);
+
+        newData.points = Math.max(data["points_made"], points);
+        newData.best_time = Math.min(data["best_time"], time);
+        newData.beat = data["beat"] == null ? won : won == true ? won : data["beat"];
+        newData.beat_date = data["beat_date"] == null && won ? new Date() : data["beat_date"];
+
+        await database.pool.query(`update players_level_data set 
+
+            points_made = ?,
+            best_time = ?,
+            beat = ?,
+            beat_date = ? where level_id = ? and player_id = ?
+        `, [newData.points, newData.best_time, newData.beat, newData.beat_date, level_id, player_id]);
+    });
+
+    socket.on("request_level_for_id", async(level_id, cb) => {
+        let [results] = await database.pool.query(`select * from levels where id = ?`, [level_id]);
+        cb(results[0]);
+    });
+
+    socket.on("like_level", async(level_id, player_id, cb) => {
+        let [results] = await database.pool.query(`select reaction from 
+            players_level_data where level_id = ? and player_id = ?
+            `, [level_id, player_id]);
+
+        let reaction = results[0].reaction;
+
+        console.log(reaction);
+
+        // like level
+        if (reaction == 0 || !reaction) {
+            console.log("lol", level_id, player_id);
+
+            await database.pool.query(`update levels set likes = likes + 1 where id = ?`, [level_id]);
+            await database.pool.query(`update players_level_data set reaction = 1 
+                where level_id = ? and player_id = ?`, [level_id, player_id]);
+
+            // unlike level
+        }
+        // else if (reaction == 1) {
+        //     await database.pool.query(`update levels set likes = likes - 1 where id = ?`, [level_id]);
+        //     await database.pool.query(`update players_level_data set reaction = 0 
+        //         where level_id = ? and player_id = ?`, [level_id, player_id]);
+        // };
+
+        let [likes_result] = await database.pool.query(`select likes from levels where id = ?`, [level_id]);
+        cb(likes_result[0].likes);
+    });
+
+    socket.on("fetch_users_level_reaction", async(level_id, player_id, cb) => {
+        let [result] = await database.pool.query(`select reaction from players_level_data 
+            where level_id = ? and player_id = ?
+            `, [level_id, player_id]);
+
+        cb(result[0]);
+    });
 });
 
 // player reacts to comment under a level
@@ -1508,18 +1592,16 @@ const player_reacts_to_comment_under_a_level = async(operation_type, bool_type, 
 
     let personal_data = await has_player_personal_level_data(player_id, level_id);
 
-    if (personal_data.length <= 0) {
+    console.log("hjjoseffffff", personal_data);
+
+    if (personal_data[0].comment_reactions == null) {
 
         let query = `
-            insert into players_level_data (level_id, player_id, comment_reactions) values (
-
-                ?,
-                ?,
-                json_object(?, ?)
-            );
+            update players_level_data set comment_reactions = ? where level_id = ? and player_id = ?
         `;
 
-        await database.pool.query(query, [level_id, player_id, comment_id, bool_type]);
+        await database.pool.query(query, [JSON.stringify({
+            [comment_id]: bool_type }), level_id, player_id]);
 
     } else {
 
