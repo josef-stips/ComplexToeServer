@@ -1454,7 +1454,7 @@ io.on('connection', socket => {
 
                 ?,
                 ?,
-                ?,<
+                ?,
                 ?,
                 ?
             )
@@ -1505,7 +1505,7 @@ io.on('connection', socket => {
         };
     });
 
-    socket.on("update_online_level_data", async(won, time, points, player_id, level_id, cb) => {
+    socket.on("update_online_level_data", async(won, time, points, player_id, level_id, patterns_used, cb) => {
         let [result] = await database.pool.query(`select points_made, best_time, beat, beat_date from players_level_data 
         where player_id = ? and level_id = ?`, [player_id, level_id]);
 
@@ -1517,13 +1517,11 @@ io.on('connection', socket => {
             beat_date: null
         };
 
-        // console.log(won, time, points);
-        // console.log(data);
-
         newData.points = Math.max(data["points_made"], points);
-        newData.best_time = Math.min(data["best_time"], time);
+        newData.best_time = data["best_time"] != 0 && data["best_time"] ? Math.min(data["best_time"], time) : time;
         newData.beat = data["beat"] == null ? won : won == true ? won : data["beat"];
         newData.beat_date = data["beat_date"] == null && won ? new Date() : data["beat_date"];
+        // console.log(newData);
 
         await database.pool.query(`update players_level_data set 
 
@@ -1532,6 +1530,22 @@ io.on('connection', socket => {
             beat = ?,
             beat_date = ? where level_id = ? and player_id = ?
         `, [newData.points, newData.best_time, newData.beat, newData.beat_date, level_id, player_id]);
+
+        // next, update columns of table levels 
+        let [level_results] = await database.pool.query(`select used_patterns from levels where id = ?`, [level_id]);
+        let used_patterns_old = level_results[0].used_patterns;
+
+        if (!used_patterns_old) used_patterns_old = [];
+
+        console.log(patterns_used);
+
+        patterns_used.forEach(p => {
+            used_patterns_old.push(p);
+        });
+
+        await database.pool.query(`update levels set used_patterns = ? where id = ?`, [JSON.stringify(used_patterns_old), level_id]);
+
+        cb(newData);
     });
 
     socket.on("request_level_for_id", async(level_id, cb) => {
@@ -1575,6 +1589,35 @@ io.on('connection', socket => {
 
         cb(result[0]);
     });
+
+    socket.on("get_avg_pattern_of_level", async(level_id, cb) => {
+        let [results] = await database.pool.query(`select used_patterns from levels where id = ?`, [level_id]);
+        let used_patterns = results[0].used_patterns;
+
+
+        console.log(used_patterns);
+
+        if (!used_patterns) {
+            cb(null)
+
+        } else {
+
+            // avg pattern
+            const mostFrequentString = used_patterns.reduce((acc, str) => {
+                acc[str] = (acc[str] || 0) + 1;
+
+                if (acc[str] > acc.maxCount) {
+                    acc.maxCount = acc[str];
+                    acc.mostFrequent = str;
+                };
+
+                return acc;
+
+            }, { mostFrequent: null, maxCount: 0 }).mostFrequent;
+
+            cb(mostFrequentString);
+        };
+    });
 });
 
 // player reacts to comment under a level
@@ -1601,7 +1644,8 @@ const player_reacts_to_comment_under_a_level = async(operation_type, bool_type, 
         `;
 
         await database.pool.query(query, [JSON.stringify({
-            [comment_id]: bool_type }), level_id, player_id]);
+            [comment_id]: bool_type
+        }), level_id, player_id]);
 
     } else {
 
