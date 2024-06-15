@@ -1618,6 +1618,36 @@ io.on('connection', socket => {
             cb(mostFrequentString);
         };
     });
+
+    // get top 100 players 
+    socket.on("get_best_players_of_level", async(level_id, cb) => {
+        let [results] = await database.pool.query(`select * from players_level_data where level_id = ?`, [level_id]);
+        let data = results;
+
+        console.log(data);
+
+        if (data.length <= 0) cb(null, null);
+
+        // sort array
+        data.sort(compare_players_level_data);
+
+        // only top 100
+        data = data.slice(0, 100);
+
+        let player_data_list = [];
+
+        // max 100 top players on level scoreboard
+        for (let i = 0; i < data.length; i++) {
+            let level_data = data[i];
+
+            let [player_result] = await database.pool.query(`select * from players where player_id = ?`, [level_data["player_id"]]);
+            let player_data = player_result[0];
+
+            player_data_list.push(player_data);
+        };
+
+        cb(data, player_data_list);
+    });
 });
 
 // player reacts to comment under a level
@@ -1634,8 +1664,6 @@ const player_reacts_to_comment_under_a_level = async(operation_type, bool_type, 
     };
 
     let personal_data = await has_player_personal_level_data(player_id, level_id);
-
-    console.log("hjjoseffffff", personal_data);
 
     if (personal_data[0].comment_reactions == null) {
 
@@ -1749,4 +1777,32 @@ const create_hash_id = (text) => {
 const getDataById = async(id) => {
     let [row] = await database.pool.query(`select * from players where player_id = ?`, [id]);
     return row[0];
+};
+
+// compare players_level_data of a level
+function compare_players_level_data(a, b) {
+    // Compare by best_time (ascending)
+    if (a.best_time !== b.best_time) {
+        return a.best_time - b.best_time;
+    };
+
+    // Compare by points_made (descending)
+    if (a.points_made !== b.points_made) {
+        return b.points_made - a.points_made;
+    };
+
+    // Compare by beat_date (ascending)
+    // Handle cases where beat_date might be null
+    const dateA = a.beat_date ? new Date(a.beat_date) : null;
+    const dateB = b.beat_date ? new Date(b.beat_date) : null;
+
+    if (dateA && dateB) {
+        return dateA - dateB;
+    } else if (dateA && !dateB) {
+        return -1; // a should come before b
+    } else if (!dateA && dateB) {
+        return 1; // b should come before a
+    } else {
+        return 0; // both dates are null, they are equal
+    };
 };
