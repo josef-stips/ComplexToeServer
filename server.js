@@ -1648,12 +1648,29 @@ io.on('connection', socket => {
 
         cb(data, player_data_list);
     });
+
+    // get last 100 players
+    socket.on("get_recent_players", async(cb) => {
+        let [players] = await database.pool.query(`select * from players`);
+
+        console.log(players.slice(0, 100))
+        cb(players.slice(0, 100));
+    });
+
+    // get 100 best players
+    socket.on("top_100_players", async(cb) => {
+        let [players] = await database.pool.query(`select * from players`);
+
+        players.sort(compare_player);
+        players.slice(0, 100);
+
+        cb(players);
+    });
 });
 
 // player reacts to comment under a level
 const player_reacts_to_comment_under_a_level = async(operation_type, bool_type, level_id, player_id, comment_id, reaction_type) => {
-
-    console.log("lol: ", operation_type, bool_type, level_id, player_id, comment_id, reaction_type);
+    // console.log("lol: ", operation_type, bool_type, level_id, player_id, comment_id, reaction_type);
 
     if (reaction_type == "like") {
         await database.pool.query(`update level_comments set likes = likes + ? where comment_id = ?`, [operation_type, comment_id]);
@@ -1804,5 +1821,20 @@ function compare_players_level_data(a, b) {
         return 1; // b should come before a
     } else {
         return 0; // both dates are null, they are equal
+    };
+};
+
+// compare players data 
+function compare_player(a, b) {
+    if (a.onlineGamesWon !== b.onlineGamesWon) {
+        return a.onlineGamesWon - b.onlineGamesWon;
+    };
+
+    if (a.XP !== b.XP) {
+        return a.onlineGamesWon - b.onlineGamesWon;
+    };
+
+    if (a.player_id !== b.player_id) {
+        return a.player_id - b.player_id;
     };
 };
