@@ -1662,9 +1662,17 @@ io.on('connection', socket => {
         let [players] = await database.pool.query(`select * from players`);
 
         players.sort(compare_player);
-        players.slice(0, 100);
+        players = players.slice(-100);
 
         cb(players);
+    });
+
+    // player updates clan data through joining a new clan
+    socket.on("update_clan_data", async(clan_data, player_id, cb) => {
+
+        let [rows] = await database.pool.query(`update players set isInClan = ? where
+            player_id = ?`, [clan_data, player_id]);
+        cb(rows.insertId);
     });
 });
 
@@ -1826,12 +1834,19 @@ function compare_players_level_data(a, b) {
 
 // compare players data 
 function compare_player(a, b) {
-    if (a.onlineGamesWon !== b.onlineGamesWon) {
-        return a.onlineGamesWon - b.onlineGamesWon;
+
+    const gamesWon1 = !a.onlineGamesWon ? 0 : a.onlineGamesWon
+    const gamesWon2 = !b.onlineGamesWon ? 0 : b.onlineGamesWon;
+
+    const XP1 = !a.XP ? 0 : a.XP;
+    const XP2 = !b.XP ? 0 : b.XP;
+
+    if (gamesWon1 !== gamesWon2) {
+        return b.onlineGamesWon - a.onlineGamesWon;
     };
 
-    if (a.XP !== b.XP) {
-        return a.onlineGamesWon - b.onlineGamesWon;
+    if (XP1 !== XP2) {
+        return b.onlineGamesWon - a.onlineGamesWon;
     };
 
     if (a.player_id !== b.player_id) {
