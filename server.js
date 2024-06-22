@@ -1361,8 +1361,30 @@ io.on('connection', socket => {
         cb(rows);
     });
 
-    socket.on("join_clan", async(player_id, cb) => {
+    socket.on("join_clan", async(player_id, clan_id, cb) => {
+        // get clan data
+        let [rows] = await database.pool.query(`select * from clans where id = ?`, [clan_id]);
+        let clanData = rows[0];
 
+        // get player data
+        let [player_rows] = await database.pool.query(`select * from players where player_id = ?`, [player_id]);
+
+        clanData["members"][player_id] = {
+            "XP": player_rows[0].XP,
+            "name": player_rows[0].player_name,
+            "role": "member",
+            "clan_id": clan_id,
+            "position": {}
+        };
+
+        // update clan member data
+        await database.pool.query(`update clans set members = ? where
+            id = ?`, [JSON.stringify(clanData.members), clan_id]);
+
+        // refresh XP value of clan
+        await clan_refresh_XP_value(clan_id, clanData);
+
+        cb(clanData);
     });
 
     // user wants to leave his clean
@@ -1372,6 +1394,7 @@ io.on('connection', socket => {
         // get clan data
         let [rows] = await database.pool.query(`select * from clans where id = ?`, [clan_id]);
         let clanData = rows[0];
+        let MemberData = clanData.members[player_id];
 
         delete clanData.members[player_id];
 
@@ -1385,6 +1408,26 @@ io.on('connection', socket => {
             // don't delete clan. Just update member data
             await database.pool.query(`update clans set members = ? where
                 id = ?`, [JSON.stringify(clanData.members), clan_id]);
+
+            // add player to previous_members row
+
+            // get
+            let [previous_members_row] = await database.pool.query(`select previous_members from clans where id = ? `, [clan_id]);
+
+            // modify
+            if (!previous_members_row) previous_members_row = {};
+
+            previous_members_row[player_id] = {
+                "XP": MemberData.XP,
+                "name": MemberData.name,
+                "role": MemberData.role,
+                "clan_id": MemberData.clan_id,
+                "position": {}
+            };
+
+            // update
+            await database.pool.query(`update clans set previous_members = ? where
+                id = ?`, [JSON.stringify(previous_members_row), clan_id]);
         };
 
         // refresh XP value of clan
@@ -1889,6 +1932,8 @@ const clan_refresh_XP_value = async(clan_id, clan_data) => {
         let member_XP = !member["XP"] ? 0 : member["XP"];
 
         console.log("igjoöfsdwgjsdföol", member_XP);
+
+        clan_XP += member_XP
     };
 
     await database.pool.query(`update clans set XP = ? where id = ?`, [clan_XP, clan_id]);

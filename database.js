@@ -362,7 +362,7 @@ const CreateClan = async(clan_name, clan_logo, clan_description, player_data, cl
                     'XP', ?
                 )
             ),
-            json_object('id', ?,'clan_id', 0, 'name', ?, 'role', 'admin'),
+            json_object('id', ?,'clan_id', 0, 'name', ?, 'role', 'leader'),
             1,
             ?,
             ?,
