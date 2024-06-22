@@ -1365,8 +1365,32 @@ io.on('connection', socket => {
 
     });
 
-    socket.on("leave_clan", async(player_id, cb) => {
+    // user wants to leave his clean
+    socket.on("leave_clan", async(player_id, player_role, default_player_clan_data, clan_id, cb) => {
+        console.log(player_id, player_role);
 
+        // get clan data
+        let [rows] = await database.pool.query(`select * from clans where id = ?`, [clan_id]);
+        let clanData = rows[0];
+
+        delete clanData.members[player_id];
+
+        // when clan is empty now, delete clan
+        if (Object.keys(clanData.members).length <= 0) {
+
+            await database.pool.query(`delete from clans where id = ?`, [clan_id]);
+
+        } else {
+
+            // don't delete clan. Just update member data
+            await database.pool.query(`update clans set members = ? where
+                id = ?`, [JSON.stringify(clanData.members), clan_id]);
+        };
+
+        // refresh XP value of clan
+        await clan_refresh_XP_value(clan_id, clanData);
+
+        cb(clanData);
     });
 
     socket.on("kick_member", async(member_id, clan_id) => {
@@ -1670,7 +1694,7 @@ io.on('connection', socket => {
     // player updates clan data through joining a new clan
     socket.on("update_clan_data", async(clan_data, player_id, cb) => {
 
-        let [rows] = await database.pool.query(`update players set isInClan = ? where
+        let [rows] = await database.pool.query(`update players set clan_data = ? where
             player_id = ?`, [clan_data, player_id]);
         cb(rows.insertId);
     });
@@ -1852,4 +1876,20 @@ function compare_player(a, b) {
     if (a.player_id !== b.player_id) {
         return a.player_id - b.player_id;
     };
+};
+
+const clan_refresh_XP_value = async(clan_id, clan_data) => {
+    console.log(clan_id, clan_data);
+
+    let members = clan_data.members;
+    let clan_XP = 0;
+
+    for (const [index, member] of Object.entries(members)) {
+
+        let member_XP = !member["XP"] ? 0 : member["XP"];
+
+        console.log("igjoöfsdwgjsdföol", member_XP);
+    };
+
+    await database.pool.query(`update clans set XP = ? where id = ?`, [clan_XP, clan_id]);
 };

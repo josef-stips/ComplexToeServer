@@ -22,15 +22,20 @@ async function getPlayers() {
 async function createPlayer() {
     // when a completely new player joins the game -> add his connection time: now() (datetime)
     // "player id" is auto_increment so an id for this player generates automatically
-    await Player_lastConnection();
+    await Player_add_default_value();
 
     let [id] = await pool.query(`select player_id from players order by player_id DESC LIMIT 1;`);
     return id;
 };
 
 // last connection of player 
-async function Player_lastConnection() {
-    let sql = ` insert into players (last_connection) values (now());`;
+async function Player_add_default_value() {
+    // create new row with last_connection and default clan_data
+    let sql = ` insert into players (last_connection, clan_data) values 
+    (now(), 
+    json_object("is_in_clan", false, "clan_id", null, "role", null)
+    );`;
+
     await pool.query(sql);
 };
 
@@ -352,7 +357,7 @@ const CreateClan = async(clan_name, clan_logo, clan_description, player_data, cl
                 ?, json_object(
                     'name', ?,
                     'clan_id', 0,
-                    'role', 'admin',
+                    'role', 'leader',
                     'position', json_object('x', 0, 'y', 0),
                     'XP', ?
                 )
