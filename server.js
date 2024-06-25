@@ -1225,7 +1225,8 @@ io.on('connection', socket => {
 
     // get player data by its id
     socket.on("GetDataByID", async(id, cb) => {
-        cb(await getDataById(id));
+        let data = await getDataById(id);
+        cb(data);
     });
 
     // user wants to remove friend from friends list
@@ -1384,6 +1385,9 @@ io.on('connection', socket => {
         // refresh XP value of clan
         await clan_refresh_XP_value(clan_id, clanData);
 
+        // connect client to clan room id
+        socket.join(rows[0]["room_id"]);
+
         cb(clanData);
     });
 
@@ -1459,15 +1463,25 @@ io.on('connection', socket => {
         };
     });
 
+    socket.on("connect_to_clan_room", async(clan_id, cb) => {
+        const [rows] = await database.pool.query(`select room_id from clans where id = ?`, [clan_id]);
+        const room_id = rows[0]["room_id"];
+
+        cb(room_id);
+        socket.join(room_id);
+    });
+
     socket.on("get_clan_data", async(clan_id, cb) => {
-        console.log(clan_id);
         let [row] = await database.pool.query(`select * from clans where id = ?`, [clan_id]);
         cb(row[0]);
     });
 
-    socket.on("playground_player_moves", (player_id, coords) => {});
+    socket.on("playground_player_moves", (player_id, coords, roomID) => {
+        console.log(player_id, ": ", coords);
+        io.to(roomID).emit("recieve_player_coords", player_id, coords);
+    });
 
-    socket.on("pass_clan_message", async(text, player_id, clan_id, cb) => {
+    socket.on("pass_clan_message", async(text, player_id, clan_id) => {
         console.log(text, player_id, clan_id);
 
         let [results] = await database.pool.query('SELECT * FROM clans WHERE id = ?', [clan_id]);
@@ -1489,7 +1503,8 @@ io.on('connection', socket => {
         ]);
 
         let player_data = await getDataById(player_id);
-        cb(chat, player_data, author_role);
+
+        io.to(results[0]["room_id"]).emit("new_clan_message", newMessage, player_data);
     });
 
     socket.on("check_personal_data_for_level_x", async(player_id, level_id, cb) => {
