@@ -1463,12 +1463,32 @@ io.on('connection', socket => {
         };
     });
 
-    socket.on("connect_to_clan_room", async(clan_id, cb) => {
-        const [rows] = await database.pool.query(`select room_id from clans where id = ?`, [clan_id]);
+    socket.on("connect_to_clan_room", async(clan_id, player_id, cb) => {
+        const [rows] = await database.pool.query(`select room_id, in_room from clans where id = ?`, [clan_id]);
         const room_id = rows[0]["room_id"];
+        let in_room_list = rows[0]["in_room"];
 
-        cb(room_id);
+        console.log(in_room_list);
+
+        if (!in_room_list) in_room_list = [];
+        !in_room_list.includes(player_id) && in_room_list.push(player_id);
+
+        await database.pool.query(`update clans set in_room = ? where id = ?`, [JSON.stringify(in_room_list), clan_id]);
+
+        cb(in_room_list);
         socket.join(room_id);
+    });
+
+    socket.on("leave_clan_room", async(roomID, clan_id, player_id) => {
+        const [rows] = await database.pool.query(`select in_room from clans where id = ?`, [clan_id]);
+        let player_in_room = rows[0]["in_room"];
+
+        if (player_in_room[player_id]) delete player_in_room[player_id];
+
+        await database.pool.query(`update clans set in_room = ? where id = ?`, [JSON.stringify(player_in_room), clan_id]);
+
+        io.to(roomID).emit("player_leaves_clan_room", player_id);
+        socket.leave(roomID);
     });
 
     socket.on("get_clan_data", async(clan_id, cb) => {
