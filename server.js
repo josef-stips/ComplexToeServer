@@ -1383,12 +1383,16 @@ io.on('connection', socket => {
             id = ?`, [JSON.stringify(clanData.members), clan_id]);
 
         // refresh XP value of clan
-        await clan_refresh_XP_value(clan_id, clanData);
+        await clan_refresh_XP_value(clan_id, clanData, socket);
 
         // connect client to clan room id
         socket.join(rows[0]["room_id"]);
 
         cb(clanData);
+
+        io.to(clanData["room_id"]).emit("player_joined_clan", player_rows[0].player_name);
+
+        passClanMsg(`${player_rows[0].player_name} joined the clan`, null, clan_id, "clan_msg");
     });
 
     // user wants to leave his clean
@@ -1432,10 +1436,14 @@ io.on('connection', socket => {
             // update
             await database.pool.query(`update clans set previous_members = ? where
                 id = ?`, [JSON.stringify(previous_members_row), clan_id]);
+
+            io.to(clanData["room_id"]).emit("player_left_clan", MemberData.name);
+
+            passClanMsg(`${MemberData.name} left the clan`, null, clan_id, "clan_msg");
         };
 
         // refresh XP value of clan
-        await clan_refresh_XP_value(clan_id, clanData);
+        await clan_refresh_XP_value(clan_id, clanData, socket);
 
         cb(clanData);
     });
@@ -1497,34 +1505,12 @@ io.on('connection', socket => {
     });
 
     socket.on("playground_player_moves", (player_id, coords, roomID) => {
-        console.log(player_id, ": ", coords);
+        // console.log(player_id, ": ", coords);
         io.to(roomID).emit("recieve_player_coords", player_id, coords);
     });
 
     socket.on("pass_clan_message", async(text, player_id, clan_id) => {
-        console.log(text, player_id, clan_id);
-
-        let [results] = await database.pool.query('SELECT * FROM clans WHERE id = ?', [clan_id]);
-        let chat = results[0].chat;
-        let author_role = results[0].members[player_id]["role"];
-
-        const newMessage = {
-            message: text,
-            from: player_id,
-            date: moment(new Date()).format('MMMM D, YYYY, h:mm A'),
-            role: author_role
-        };
-
-        if (chat === null) chat = [];
-        chat.push(newMessage);
-
-        let [ResultSetHeader] = await database.pool.query(`update clans set chat = ? where id = ?`, [
-            JSON.stringify(chat), clan_id
-        ]);
-
-        let player_data = await getDataById(player_id);
-
-        io.to(results[0]["room_id"]).emit("new_clan_message", newMessage, player_data);
+        passClanMsg(text, player_id, clan_id, "human");
     });
 
     socket.on("check_personal_data_for_level_x", async(player_id, level_id, cb) => {
@@ -1776,6 +1762,20 @@ io.on('connection', socket => {
             player_id = ?`, [clan_data, player_id]);
         cb(rows.insertId);
     });
+
+    socket.on("send_XP_to_clan", async(clan_id, player_id, player_XP, cb) => {
+        let [rows] = await database.pool.query(`select * from clans where id = ?`, [clan_id]);
+        let members = rows[0]["members"];
+
+        console.log(rows);
+
+        members[player_id].XP = player_XP;
+
+        await database.pool.query(`update clans set members = ? where id = ?`, [JSON.stringify(members), clan_id]);
+
+        await clan_refresh_XP_value(clan_id, rows[0], socket);
+        cb(rows[0]);
+    });
 });
 
 // player reacts to comment under a level
@@ -1876,6 +1876,36 @@ const AcceptFriendRequest = async(RequesterID, AccepterID, cb, fromSendFriendReq
     };
 };
 
+// pass clan message
+const passClanMsg = async(text, player_id, clan_id, msg_type) => {
+    console.log(text, player_id, clan_id);
+
+    let [results] = await database.pool.query('SELECT * FROM clans WHERE id = ?', [clan_id]);
+    let chat = results[0].chat;
+    let author_role = player_id ? results[0].members[player_id]["role"] : null;
+
+    const newMessage = {
+        message: text,
+        from: player_id,
+        date: moment(new Date()).format('MMMM D, YYYY, h:mm A'),
+        role: author_role,
+        type: msg_type
+    };
+
+    if (chat === null) chat = [];
+    chat.push(newMessage);
+
+    let [ResultSetHeader] = await database.pool.query(`update clans set chat = ? where id = ?`, [
+        JSON.stringify(chat), clan_id
+    ]);
+
+    if (player_id) {
+
+        let player_data = await getDataById(player_id);
+        io.to(results[0]["room_id"]).emit("new_clan_message", newMessage, player_data);
+    };
+};
+
 // generates ID for the room
 const createID = (min, max) => { let = roomID = Math.floor(Math.random() * (max - min + 1)) + min; return roomID; };
 
@@ -1956,11 +1986,61 @@ function compare_player(a, b) {
     };
 };
 
-const clan_refresh_XP_value = async(clan_id, clan_data) => {
+const level_xp_requirement = {
+    1: 0,
+    2: 100,
+    3: 300,
+    4: 700,
+    5: 900,
+    6: 1100,
+    7: 1500,
+    8: 1900,
+    9: 2200,
+    10: 3000,
+    11: 5000,
+    12: 6000,
+    13: 8000,
+    14: 10000,
+    15: 12000,
+    16: 14000,
+    17: 16000,
+    18: 17000,
+    19: 18000,
+    20: 19000,
+    21: 20000,
+    22: 21000,
+    23: 22000,
+    24: 23000,
+    25: 24000,
+    26: 25000,
+    27: 26000,
+    28: 27000,
+    29: 28000,
+    30: 29000,
+    31: 30000,
+    32: 31000,
+    33: 32000,
+    34: 33000,
+    35: 34000,
+    36: 35000,
+    37: 36000,
+    38: 37000,
+    39: 38000,
+    40: 40000
+};
+
+const clan_refresh_XP_value = async(clan_id, clan_data, socket) => {
     console.log(clan_id, clan_data);
 
     let members = clan_data.members;
     let clan_XP = 0;
+
+    let curr_clan_level = clan_data["level"];
+
+    let next_level = Number(Object.keys(level_xp_requirement)[curr_clan_level]);
+    let XP_for_next_level = level_xp_requirement[curr_clan_level + 1];
+
+    console.log(curr_clan_level, next_level, XP_for_next_level, "dfgasdgf");
 
     for (const [index, member] of Object.entries(members)) {
 
@@ -1971,5 +2051,14 @@ const clan_refresh_XP_value = async(clan_id, clan_data) => {
         clan_XP += member_XP
     };
 
+    if (clan_XP >= XP_for_next_level) {
+        curr_clan_level = next_level;
+    };
+
     await database.pool.query(`update clans set XP = ? where id = ?`, [clan_XP, clan_id]);
+    await database.pool.query(`update clans set level = ? where id = ?`, [curr_clan_level, clan_id]);
+
+    if (clan_data["XP"] < clan_XP) {
+        socket.emit("update_clan_XP_bar", clan_XP, curr_clan_level);
+    };
 };

@@ -1,5 +1,7 @@
 const mysql = require('mysql2');
 const dotenv = require('dotenv');
+const moment = require('moment');
+
 dotenv.config();
 
 const pool = mysql.createPool({
@@ -359,7 +361,8 @@ const CreateClan = async(clan_name, clan_logo, clan_description, player_data, cl
                     'clan_id', 0,
                     'role', 'leader',
                     'position', json_object('x', 0, 'y', 0),
-                    'XP', ?
+                    'XP', ?,
+                    'join_date', ?
                 )
             ),
             json_object('id', ?,'clan_id', 0, 'name', ?, 'role', 'leader'),
@@ -373,6 +376,7 @@ const CreateClan = async(clan_name, clan_logo, clan_description, player_data, cl
             clan_name, clan_logo, player_data["player_id"],
             player_data["player_name"],
             player_data["XP"],
+            moment(new Date()).format('MMMM D, YYYY'),
             player_data["player_id"],
             player_data["player_name"],
             player_data["XP"],
