@@ -1375,7 +1375,8 @@ io.on('connection', socket => {
             "name": player_rows[0].player_name,
             "role": "member",
             "clan_id": clan_id,
-            "position": {}
+            "position": {},
+            "join_date": moment(new Date()).format('MMMM D, YYYY')
         };
 
         // update clan member data
@@ -1397,50 +1398,9 @@ io.on('connection', socket => {
 
     // user wants to leave his clean
     socket.on("leave_clan", async(player_id, player_role, default_player_clan_data, clan_id, cb) => {
-        console.log(player_id, player_role);
+        console.log(player_id);
 
-        // get clan data
-        let [rows] = await database.pool.query(`select * from clans where id = ?`, [clan_id]);
-        let clanData = rows[0];
-        let MemberData = clanData.members[player_id];
-
-        delete clanData.members[player_id];
-
-        // when clan is empty now, delete clan
-        if (Object.keys(clanData.members).length <= 0) {
-
-            await database.pool.query(`delete from clans where id = ?`, [clan_id]);
-
-        } else {
-
-            // don't delete clan. Just update member data
-            await database.pool.query(`update clans set members = ? where
-                id = ?`, [JSON.stringify(clanData.members), clan_id]);
-
-            // add player to previous_members row
-
-            // get
-            let [previous_members_row] = await database.pool.query(`select previous_members from clans where id = ? `, [clan_id]);
-
-            // modify
-            if (!previous_members_row) previous_members_row = {};
-
-            previous_members_row[player_id] = {
-                "XP": MemberData.XP,
-                "name": MemberData.name,
-                "role": MemberData.role,
-                "clan_id": MemberData.clan_id,
-                "position": {}
-            };
-
-            // update
-            await database.pool.query(`update clans set previous_members = ? where
-                id = ?`, [JSON.stringify(previous_members_row), clan_id]);
-
-            io.to(clanData["room_id"]).emit("player_left_clan", MemberData.name);
-
-            passClanMsg(`${MemberData.name} left the clan`, null, clan_id, "clan_msg");
-        };
+        let clanData = await removePlayerOfClan(player_id, clan_id);
 
         // refresh XP value of clan
         await clan_refresh_XP_value(clan_id, clanData, socket);
@@ -1448,8 +1408,16 @@ io.on('connection', socket => {
         cb(clanData);
     });
 
-    socket.on("kick_member", async(member_id, clan_id) => {
+    socket.on("kick_member", async(member_id, clan_id, kicker_name, kicker_id, kick_reason, cb) => {
+        let kick_obj = { name: kicker_name, kick_reason, kicker_id };
 
+        // remove out of clan with kick obj
+        let clanData = await removePlayerOfClan(member_id, clan_id, kick_obj);
+
+        // refresh XP value of clan
+        await clan_refresh_XP_value(clan_id, clanData, socket);
+
+        cb(true);
     });
 
     socket.on("promote_member", async(member_id, clan_id) => {
@@ -1488,6 +1456,8 @@ io.on('connection', socket => {
     });
 
     socket.on("leave_clan_room", async(roomID, clan_id, player_id) => {
+        console.log(roomID, clan_id, player_id);
+
         const [rows] = await database.pool.query(`select in_room from clans where id = ?`, [clan_id]);
         let player_in_room = rows[0]["in_room"];
 
@@ -1767,7 +1737,7 @@ io.on('connection', socket => {
         let [rows] = await database.pool.query(`select * from clans where id = ?`, [clan_id]);
         let members = rows[0]["members"];
 
-        console.log(rows);
+        console.log(members, player_id, player_XP);
 
         members[player_id].XP = player_XP;
 
@@ -1775,6 +1745,27 @@ io.on('connection', socket => {
 
         await clan_refresh_XP_value(clan_id, rows[0], socket);
         cb(rows[0]);
+    });
+
+    // on client load client requests ingoing clan messages in his personal db row or important clan messages in clans table
+    socket.on("check_for_ingoing_clan_msgs", async(player_id, clan_id, cb) => {
+
+        let [player_rows] = await database.pool.query(`select clan_msgs from players where player_id = ?`, [player_id]);
+        let personal_clan_msg = player_rows[0].clan_msgs;
+
+        if (typeof clan_id == Number) {
+
+            console.log(clan_id);
+        };
+
+        console.log(personal_clan_msg);
+
+        cb(personal_clan_msg);
+    });
+
+    // clean ingoing personal clan messages
+    socket.on("clean_personal_clan_msgs", async(player_id) => {
+        await database.pool.query(`update players set clan_msgs = null where player_id = ?`, [player_id]);
     });
 });
 
@@ -1874,6 +1865,82 @@ const AcceptFriendRequest = async(RequesterID, AccepterID, cb, fromSendFriendReq
             fromSendFriendRequestBtn == "fromSendFriendRequestBtn" ? cb("FriendsNow") : cb(true); // Requester successfully removed from request list and added to friends list
         };
     };
+};
+
+// remove player out of a clan
+const removePlayerOfClan = async(player_id, clan_id, kick_action) => { // kick_action ? {name: kicker_name, reason: "kick reason" ...}
+
+    // get clan data
+    let [rows] = await database.pool.query(`select * from clans where id = ?`, [clan_id]);
+    let clanData = rows[0];
+    let MemberData = clanData.members[player_id];
+
+    delete clanData.members[player_id];
+
+    // when clan is empty now, delete clan
+    if (Object.keys(clanData.members).length <= 0) {
+
+        await database.pool.query(`delete from clans where id = ?`, [clan_id]);
+
+    } else {
+
+        // don't delete clan. Just update member data
+        await database.pool.query(`update clans set members = ? where
+                id = ?`, [JSON.stringify(clanData.members), clan_id]);
+
+        // add player to previous_members row
+
+        // get
+        let [previous_members_row] = await database.pool.query(`select previous_members from clans where id = ? `, [clan_id]);
+        let previous_members = previous_members_row[0].previous_members;
+
+        console.log(previous_members);
+
+        // modify
+        if (!previous_members) previous_members = {};
+
+        previous_members[player_id] = {
+            "XP": MemberData.XP,
+            "name": MemberData.name,
+            "role": MemberData.role,
+            "clan_id": MemberData.clan_id,
+            "position": {}
+        };
+
+        console.log(previous_members);
+
+        // update
+        await database.pool.query(`update clans set previous_members = ? where
+                id = ?`, [JSON.stringify(previous_members), clan_id]);
+
+        console.log(kick_action, "rdsggsgfegf");
+
+        // player got not kicked
+        if (!kick_action) {
+
+            // live message
+            io.to(clanData["room_id"]).emit("player_left_clan", MemberData.name);
+
+            // save live message in db
+            passClanMsg(`${MemberData.name} left the clan`, null, clan_id, "clan_msg");
+
+            // player got kicked
+        } else {
+
+            // live message
+            io.to(clanData["room_id"]).emit("player_got_kicked", MemberData.name, kick_action.name, player_id, clanData);
+
+            // save live message in db
+            passClanMsg(`${kick_action.name} kicked ${MemberData.name} out of the clan`, null, clan_id, "clan_msg");
+
+            // update clan message of player
+            let clan_player_msg = { msg: true, msg_type: "kick", kick_reason: kick_action.kick_reason, kicker_id: kick_action.kicker_id, kicker_name: kick_action.name };
+
+            await database.pool.query(`update players set clan_msgs = ?, clan_data = ? where player_id = ?`, [JSON.stringify(clan_player_msg), null, player_id]);
+        };
+    };
+
+    return clanData;
 };
 
 // pass clan message
