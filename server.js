@@ -58,6 +58,7 @@ io.on('connection', socket => {
 
     // Player already was in the game
     socket.on("PlayerAlreadyExists", async(PlayerID, treasureIsAvailible) => {
+
         // If the player already exists, a countdown (interval) is playing in the background in the database already
         // Check if the countdown is done
         if (treasureIsAvailible == "false") {
@@ -128,6 +129,18 @@ io.on('connection', socket => {
     // player disconnected from the lobby
     socket.on('disconnect', async reason => {
         console.log('user disconnected from the server ' + socket.id);
+
+        // about clan rooms
+        let rooms = [...socket.rooms];
+
+        console.log(rooms, "dfsdfsafggfggfdggsfd");
+
+        rooms.forEach(room => {
+            if (isNaN(room)) {
+
+                io.to(room).emit('player_leaves_clan_room', 74);
+            };
+        });
 
         // check if the disconnected socket belongs to a room and if yes which role he played in that room
         let data = await database.FindRoomBySocketID(socket.id);
@@ -1370,6 +1383,11 @@ io.on('connection', socket => {
         // get player data
         let [player_rows] = await database.pool.query(`select * from players where player_id = ?`, [player_id]);
 
+        if (clanData["previous_members"][player_id]) {
+            cb(false, clanData, player_rows[0]);
+            return;
+        };
+
         clanData["members"][player_id] = {
             "XP": player_rows[0].XP,
             "name": player_rows[0].player_name,
@@ -1389,11 +1407,11 @@ io.on('connection', socket => {
         // connect client to clan room id
         socket.join(rows[0]["room_id"]);
 
-        cb(clanData);
+        cb(true, clanData, player_rows[0]);
 
         io.to(clanData["room_id"]).emit("player_joined_clan", player_rows[0].player_name);
 
-        passClanMsg(`${player_rows[0].player_name} joined the clan`, null, clan_id, "clan_msg");
+        passClanMsg(`${player_rows[0].player_name} joined the clan`, null, clan_id, "clan_msg", player_rows[0]);
     });
 
     // user wants to leave his clean
@@ -1428,7 +1446,7 @@ io.on('connection', socket => {
         let hash = create_hash_id(clan_name);
 
         let [row] = await database.pool.query(`select * from players where player_id = ?`, [player_id]);
-        let [serverStatus, insertId] = await database.CreateClan(clan_name, clan_logo, clan_description, row[0], hash, cb);
+        let [serverStatus, insertId] = await database.CreateClan(clan_name, clan_logo, clan_description, row[0], "clan" + hash, cb);
 
         if (serverStatus == 2) {
             let [rows] = await database.pool.query(`select * from clans where id = ?`, [insertId]);
@@ -1466,7 +1484,7 @@ io.on('connection', socket => {
         await database.pool.query(`update clans set in_room = ? where id = ?`, [JSON.stringify(player_in_room), clan_id]);
 
         io.to(roomID).emit("player_leaves_clan_room", player_id);
-        socket.leave(roomID);
+        // socket.leave(roomID);
     });
 
     socket.on("get_clan_data", async(clan_id, cb) => {
@@ -1758,14 +1776,47 @@ io.on('connection', socket => {
             console.log(clan_id);
         };
 
-        console.log(personal_clan_msg);
-
         cb(personal_clan_msg);
     });
 
     // clean ingoing personal clan messages
     socket.on("clean_personal_clan_msgs", async(player_id) => {
         await database.pool.query(`update players set clan_msgs = null where player_id = ?`, [player_id]);
+    });
+
+    // player sends join request to clan
+    socket.on("clan_join_request", async(player_data, clan_data, cb) => {
+
+        // send clan live request and save in db in messages
+        try {
+            await passClanMsg(`${player_data.player_name} wants to join the clan`, player_data.player_id, clan_data["id"], "join_request", player_data);
+            cb(true);
+
+        } catch (error) {
+            cb(false);
+        };
+    });
+
+    // remove msg from db and live 
+    socket.on("remove_clan_msg", async(clan_id, msg_id) => {
+
+        // get
+        let [row] = await database.pool.query(`select * from clans where id = ?`, [clan_id]);
+        let clan_chat = row[0].chat;
+
+        console.log(clan_chat);
+
+        // modify 
+        let msg = clan_chat.find(msg => msg.msg_id === msg_id);
+        let newChat = clan_chat;
+
+        if (clan_chat.includes(msg)) {
+            newChat = clan_chat.filter(m => m !== msg);
+        };
+
+        // update
+        await database.pool.query(`update clans set chat = ? where id = ?`, [JSON.stringify(newChat), clan_id]);
+        io.to(row[0].room_id).emit("rm_clan_msg", msg_id);
     });
 });
 
@@ -1944,22 +1995,25 @@ const removePlayerOfClan = async(player_id, clan_id, kick_action) => { // kick_a
 };
 
 // pass clan message
-const passClanMsg = async(text, player_id, clan_id, msg_type) => {
-    console.log(text, player_id, clan_id);
-
+const passClanMsg = async(text, player_id, clan_id, msg_type, player_data = null) => {
     let [results] = await database.pool.query('SELECT * FROM clans WHERE id = ?', [clan_id]);
     let chat = results[0].chat;
-    let author_role = player_id ? results[0].members[player_id]["role"] : null;
+    let author_role = (msg_type !== "join_request") ?
+        (player_id ? results[0].members[player_id]["role"] : null) :
+        null;
+
+    if (chat === null) chat = [];
 
     const newMessage = {
+        msg_id: chat.length,
         message: text,
         from: player_id,
         date: moment(new Date()).format('MMMM D, YYYY, h:mm A'),
         role: author_role,
-        type: msg_type
+        type: msg_type,
+        player_data: player_data
     };
 
-    if (chat === null) chat = [];
     chat.push(newMessage);
 
     let [ResultSetHeader] = await database.pool.query(`update clans set chat = ? where id = ?`, [
@@ -1969,7 +2023,7 @@ const passClanMsg = async(text, player_id, clan_id, msg_type) => {
     if (player_id) {
 
         let player_data = await getDataById(player_id);
-        io.to(results[0]["room_id"]).emit("new_clan_message", newMessage, player_data);
+        io.to(results[0]["room_id"]).emit("new_clan_message", newMessage, player_data, msg_type);
     };
 };
 
