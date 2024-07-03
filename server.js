@@ -1383,6 +1383,15 @@ io.on('connection', socket => {
         // get player data
         let [player_rows] = await database.pool.query(`select * from players where player_id = ?`, [player_id]);
 
+        // user already sended request
+        if (clanData["requests"] == null) clanData["requests"] = [];
+
+        if (clanData["requests"].includes(player_id)) {
+            cb("request_sended");
+            return;
+        };
+
+        // user is previous member. Have to send join request
         if (clanData["previous_members"][player_id]) {
             cb(false, clanData, player_rows[0]);
             return;
@@ -1790,9 +1799,11 @@ io.on('connection', socket => {
         // send clan live request and save in db in messages
         try {
             await passClanMsg(`${player_data.player_name} wants to join the clan`, player_data.player_id, clan_data["id"], "join_request", player_data);
+
             cb(true);
 
         } catch (error) {
+            console.log(error);
             cb(false);
         };
     });
@@ -2004,6 +2015,7 @@ const passClanMsg = async(text, player_id, clan_id, msg_type, player_data = null
 
     if (chat === null) chat = [];
 
+    // define and add new message
     const newMessage = {
         msg_id: chat.length,
         message: text,
@@ -2016,12 +2028,19 @@ const passClanMsg = async(text, player_id, clan_id, msg_type, player_data = null
 
     chat.push(newMessage);
 
-    let [ResultSetHeader] = await database.pool.query(`update clans set chat = ? where id = ?`, [
-        JSON.stringify(chat), clan_id
+    if (!results[0].requests) results[0].requests = [];
+
+    // update "requests" row
+    if (msg_type == "join_request") {
+        results[0]["requests"].push(player_id);
+    };
+
+    let [ResultSetHeader] = await database.pool.query(`update clans set chat = ?, requests = ? where id = ?`, [
+        JSON.stringify(chat), JSON.stringify(results[0]["requests"]), clan_id
     ]);
 
+    // send data live
     if (player_id) {
-
         let player_data = await getDataById(player_id);
         io.to(results[0]["room_id"]).emit("new_clan_message", newMessage, player_data, msg_type);
     };
