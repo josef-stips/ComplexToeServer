@@ -1431,29 +1431,9 @@ io.on('connection', socket => {
         let member = members[member_id];
 
         if (member) {
-            let old_role = member.role;
-            let curr_role_index = Object.keys(constData.clan_roles).find(key => constData.clan_roles[key] === member.role);
-            let new_role_index = curr_role_index - 1;
-            let new_role = constData.clan_roles[new_role_index];
+            let new_role_index = await promoteClanMember(member, member_id, members, clan_id, null, clanData, promote_reason);
 
-            member.role = new_role
-
-            // define msg for player who gets promoted
-            const msg = {
-                "msg_type": "promote",
-                "old_role": old_role,
-                "new_role": member.role,
-                "clan_name": clanData.name,
-                "clan_id": clanData.id,
-                promote_reason
-            };
-
-            await database.pool.query(`update clans set members = ? where id = ?`, [JSON.stringify(members), clan_id]);
-            await database.pool.query(`update players set clan_msgs = ? where player_id = ?`, [JSON.stringify(msg), member_id]);
-
-            passClanMsg(`${member.name} got promoted to ${member.role}`, member_id, clan_id, "promotion", null, null);
-
-            cb({ new_role: [constData.clan_roles[new_role_index]] })
+            cb({ new_role: [constData.clan_roles[new_role_index]] });
 
         } else {
             cb(false);
@@ -1469,6 +1449,7 @@ io.on('connection', socket => {
         if (serverStatus == 2) {
             let [rows] = await database.pool.query(`select * from clans where id = ?`, [insertId]);
             await clan_refresh_XP_value(rows[0].id, rows[0]);
+            await passClanMsg(`${row[0].player_name} created this clan`, null, insertId, "clan_msg");
 
             cb(rows[0]);
 
@@ -1512,9 +1493,9 @@ io.on('connection', socket => {
         cb(row[0]);
     });
 
-    socket.on("playground_player_moves", (player_id, coords, roomID) => {
+    socket.on("playground_player_moves", (player_id, UserInfoClass, UserInfoColor, UserIcon, coords, roomID) => {
         // console.log(player_id, ": ", coords);
-        io.to(roomID).emit("recieve_player_coords", player_id, coords);
+        io.to(roomID).emit("recieve_player_coords", player_id, coords, UserInfoClass, UserInfoColor, UserIcon);
     });
 
     socket.on("pass_clan_message", async(text, player_id, clan_id) => {
@@ -1783,7 +1764,7 @@ io.on('connection', socket => {
 
         await database.pool.query(`update clans set members = ? where id = ?`, [JSON.stringify(members), clan_id]);
 
-        await clan_refresh_XP_value(clan_id, rows[0], cb, "init");
+        await clan_refresh_XP_value(clan_id, rows[0], "init");
 
         let [updated_row] = await database.pool.query(`select * from clans where id = ?`, [clan_id]);
         cb(updated_row[0]);
@@ -1854,6 +1835,7 @@ io.on('connection', socket => {
     socket.on("update_clan_desc", async(clan_id, new_desc, cb) => {
         try {
             await database.pool.query(`update clans set description = ? where id = ?`, [new_desc, clan_id]);
+            await passClanMsg(`updated clan description`, null, clan_id, "clan_msg", null, null, false, "clan_msg");
             cb(true);
 
         } catch (error) {
@@ -1968,11 +1950,32 @@ const AddPlayerToClan = async(player_id, clan_id, cb, accept_request) => {
     // get clan data
     let [rows] = await database.pool.query(`select * from clans where id = ?`, [clan_id]);
     let clanData = rows[0];
+    let chat = clanData.chat;
+
+    if (Object.keys(clanData.members).length > 50) {
+        cb("full");
+        return;
+    };
 
     if (!clanData) return;
 
     // get player data
     let [player_rows] = await database.pool.query(`select * from players where player_id = ?`, [player_id]);
+
+    // when player already in clan. DO NOT add to another clan
+    if (!player_rows[0].clan_data) player_rows[0].clan_data = { "role": null, "clan_id": null, "is_in_clan": false };
+    if (player_rows[0].clan_data.clan_id != null) {
+
+        console.log("gfgsdfgsdgs", accept_request);
+
+        if (accept_request) {
+
+            await passClanMsg(`${player_rows[0].player_name} is already in another clan`, player_rows[0].player_id, clan_id, "clan_msg", player_rows[0], null, true);
+            await cb(true, clanData, player_rows[0]);
+        };
+
+        return;
+    };
 
     // do not look after it when the player's request is accepted
     if (!accept_request) {
@@ -2038,21 +2041,49 @@ const AddPlayerToClan = async(player_id, clan_id, cb, accept_request) => {
     await passClanMsg(`${player_rows[0].player_name} joined the clan`, null, clan_id, "clan_msg", player_rows[0]);
 };
 
+// choose new clan leader
+const chooseNewClanLeader = async(members) => {
+    members = Object.entries(members);
+
+    const roleOrder = {
+        'dikaios': 1,
+        'sophron': 2,
+        'member': 3
+    };
+    // console.log(members);
+
+    // sort after roles. Player with the highest role becomes the new leader
+    const member = members
+        .filter(([id, data]) => data.role !== 'leader') // sort out previous leader
+        .sort(([idA, dataA], [idB, dataB]) => { // sort members in a highrockey
+            return roleOrder[dataA.role] - roleOrder[dataB.role];
+        })[0]; // select most valuable player to be choosen as a leader
+
+
+    return member ? [member[1], member[0]] : [null, null];
+};
+
 // remove player out of a clan
 const removePlayerOfClan = async(player_id, clan_id, kick_action) => { // kick_action ? {name: kicker_name, reason: "kick reason" ...}
-
-    console.log(clan_id, player_id, kick_action, "fgiojgoajgjioklsflikjghslidkhgklsjdffsdhgjklsdfghsdjkghsdklj");
+    // console.log(clan_id, player_id, kick_action, "fgiojgoajgjioklsflikjghslidkhgklsjdffsdhgjklsdfghsdjkghsdklj");
 
     // get clan data
     let [rows] = await database.pool.query(`select * from clans where id = ?`, [clan_id]);
     let clanData = rows[0];
     let MemberData = clanData.members[player_id];
 
+    // leader left the clan. Have to choose new leader
+    if (MemberData.role == "leader") {
+        let [memberToBePromoted, memberId] = await chooseNewClanLeader(clanData.members);
+
+        memberToBePromoted && await promoteClanMember(memberToBePromoted, memberId, clanData.members, clan_id, "promoteToLeader", clanData,
+            `${MemberData.name}, the previous leader, has left the clan. You have been automatically promoted to leader because you are the most valuable player in the clan.`);
+    };
+
     delete clanData.members[player_id];
 
     // when clan is empty now, delete clan
     if (Object.keys(clanData.members).length <= 0) {
-
         await database.pool.query(`delete from clans where id = ?`, [clan_id]);
 
     } else {
@@ -2116,11 +2147,59 @@ const removePlayerOfClan = async(player_id, clan_id, kick_action) => { // kick_a
     return clanData;
 };
 
+// promote clan member
+const promoteClanMember = async(member, member_id, members, clan_id, promoteToLeader, clanData, promote_reason) => {
+
+    let old_role = member.role;
+    let curr_role_index;
+    let new_role_index;
+    let new_role;
+
+    if (!promoteToLeader) {
+
+        old_role = member.role;
+        curr_role_index = Object.keys(constData.clan_roles).find(key => constData.clan_roles[key] === member.role);
+        new_role_index = curr_role_index - 1;
+        new_role = constData.clan_roles[new_role_index];
+
+    } else {
+        new_role = "leader";
+
+        const newAdminObj = {
+            "id": member_id,
+            "name": member.name,
+            "role": "leader",
+            "clan_id": clan_id
+        };
+
+        await database.pool.query(`update clans set admin = ? where id = ?`, [JSON.stringify(newAdminObj), clan_id]);
+    };
+
+    member.role = new_role
+
+    // define msg for player who gets promoted
+    const msg = {
+        "msg_type": "promote",
+        "old_role": old_role,
+        "new_role": member.role,
+        "clan_name": clanData.name,
+        "clan_id": clanData.id,
+        promote_reason
+    };
+
+    await database.pool.query(`update clans set members = ? where id = ?`, [JSON.stringify(members), clan_id]);
+    await database.pool.query(`update players set clan_msgs = ? where player_id = ?`, [JSON.stringify(msg), member_id]);
+
+    await passClanMsg(`${member.name} got promoted to ${member.role}`, member_id, clan_id, "promotion", null, null);
+
+    return new_role_index;
+};
+
 // pass clan message
-const passClanMsg = async(text, player_id, clan_id, msg_type, player_data = null, request_text) => {
+const passClanMsg = async(text, player_id, clan_id, msg_type, player_data = null, request_text, no_player_id_needed, simple_text_msg) => {
     let [results] = await database.pool.query('SELECT * FROM clans WHERE id = ?', [clan_id]);
     let chat = results[0].chat;
-    let author_role = (msg_type !== "join_request") ?
+    let author_role = (msg_type !== "join_request" && !no_player_id_needed) ?
         (player_id ? results[0].members[player_id]["role"] : null) :
         null;
 
@@ -2130,9 +2209,11 @@ const passClanMsg = async(text, player_id, clan_id, msg_type, player_data = null
 
     if (chat === null) chat = [];
 
+    let msg_id = chat[chat.length - 1] ? chat[chat.length - 1].msg_id + 1 : 0;
+
     // define and add new message
     const newMessage = {
-        msg_id: chat.length,
+        msg_id: msg_id,
         message: text,
         from: player_id,
         date: moment(new Date()).format('MMMM D, YYYY, h:mm A'),
@@ -2143,6 +2224,10 @@ const passClanMsg = async(text, player_id, clan_id, msg_type, player_data = null
     };
 
     chat.push(newMessage);
+
+    if (chat.length > 100) {
+        chat.shift();
+    };
 
     if (!results[0].requests) results[0].requests = [];
 
@@ -2159,6 +2244,10 @@ const passClanMsg = async(text, player_id, clan_id, msg_type, player_data = null
     if (player_id) {
         let player_data = await getDataById(player_id);
         io.to(results[0]["room_id"]).emit("new_clan_message", newMessage, player_data, msg_type);
+    };
+
+    if (simple_text_msg) {
+        io.to(results[0]["room_id"]).emit("new_clan_message", newMessage, null, "clan_msg");
     };
 };
 
