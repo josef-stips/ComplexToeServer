@@ -2389,9 +2389,10 @@ const clan_refresh_XP_value = async(clan_id, clan_data, from) => {
         };
 
         let curr_clan_level = getClanLevel(clan_XP);
+        let best_level = clan_data.best_level <= curr_clan_level ? curr_clan_level : clan_data.best_level;
 
         await database.pool.query(`update clans set XP = ? where id = ?`, [clan_XP, clan_id]);
-        await database.pool.query(`update clans set level = ? where id = ?`, [curr_clan_level, clan_id]);
+        await database.pool.query(`update clans set level = ?, best_level = ? where id = ?`, [curr_clan_level, best_level, clan_id]);
 
         if (from != "init") {
 
