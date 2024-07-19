@@ -10,7 +10,6 @@ const App = express();
 const server = http.createServer(App);
 const PORT = process.env.PORT || 3000;
 const { Server } = require('socket.io');
-const { resolve } = require('path');
 
 const io = new Server(server, {
     cors: {
@@ -1760,14 +1759,20 @@ io.on('connection', socket => {
 
         console.log(members, player_id, player_XP);
 
-        members[player_id].XP = player_XP;
+        try {
+            members[player_id].XP = player_XP;
 
-        await database.pool.query(`update clans set members = ? where id = ?`, [JSON.stringify(members), clan_id]);
+            await database.pool.query(`update clans set members = ? where id = ?`, [JSON.stringify(members), clan_id]);
+            await clan_refresh_XP_value(clan_id, rows[0], "init");
 
-        await clan_refresh_XP_value(clan_id, rows[0], "init");
+            let [updated_row] = await database.pool.query(`select * from clans where id = ?`, [clan_id]);
 
-        let [updated_row] = await database.pool.query(`select * from clans where id = ?`, [clan_id]);
-        cb(updated_row[0]);
+            cb(updated_row[0]);
+
+        } catch (error) {
+            cb(rows[0]);
+            console.log(error);
+        };
     });
 
     // on client load client requests ingoing clan messages in his personal db row or important clan messages in clans table
@@ -1842,6 +1847,20 @@ io.on('connection', socket => {
             console.log(error);
             cb(false);
         };
+    });
+
+    // game log stuff
+
+    // load from server when client wants to monitor his previuous games in a list f.ex
+    socket.on("load_gameLog", async(player_id, cb) => {
+        let [row] = await database.pool.query(`select * from gamelogs where p1_id = ? or p2_id = ?`, [player_id, player_id]);
+        cb(row[0]);
+    });
+
+    // when client played a new game and finished playing. load to table
+    socket.on("update_gameLog", async(gameData, cb) => {
+        let [insertId] = await database.new_gamLog_entry(gameData);
+        cb(insertId);
     });
 });
 

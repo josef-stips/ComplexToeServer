@@ -391,6 +391,74 @@ const CreateClan = async(clan_name, clan_logo, clan_description, player_data, cl
     };
 };
 
+// load new column to gameLogs
+const new_gamLog_entry = async(gameData) => {
+    let [row] = await database.pool.query(
+        `insert into gamelogs (
+            level_id,
+            level_name,
+            level_icon,
+            p1_id,
+            p2_id,
+            p1_name,
+            p2_name,
+            p2_color,
+            p1_color
+            p1_icon,
+            p2_icon,
+            p1_points,
+            p2_points,
+            blocker,
+            blocker_name,
+            cells_blocked_by_blocker,
+            patterns_used,
+            field_size,
+            bg1,
+            bg2,
+            game_duration,
+            moves,
+            player_clock,
+            points_to_win,
+            allowed_patterns,
+            game_mode,
+            field_mode,
+            kill_cells_after_point,
+            max_amount_of_moves
+        ) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, ?, ?,?)`, [
+            gameData[0],
+            gameData[1],
+            gameData[2],
+            gameData[3],
+            gameData[4],
+            gameData[5],
+            gameData[6],
+            gameData[7],
+            gameData[8],
+            gameData[9],
+            gameData[10],
+            gameData[11],
+            gameData[12],
+            gameData[13],
+            gameData[14],
+            gameData[15],
+            gameData[16],
+            gameData[17],
+            gameData[18],
+            gameData[19],
+            gameData[20],
+            gameData[21],
+            gameData[22],
+            gameData[23],
+            gameData[24],
+            gameData[25],
+            gameData[26],
+            gameData[27]
+        ]
+    );
+
+    return row.insertId;
+};
+
 // try to log functions
 async function main() {
     try {
@@ -430,5 +498,6 @@ module.exports = {
     UpdateAllUserData: UpdateAllUserData,
     SearchPlayers: SearchPlayers,
     SaveNewLevel,
-    CreateClan
+    CreateClan,
+    new_gamLog_entry
 };
