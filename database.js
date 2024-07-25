@@ -90,20 +90,20 @@ async function PlayerUpdatesData(player_id, newName, newIcon, playerInfoClass, p
 async function CreateRoom(id, xyCellAmount, InnerGameMode, playerTimer, fieldoptions, globalGameTimer, isPlaying, fieldIndex, fieldTitle,
     thirdPlayer, pointsToWin, win_patterns, playerAmount, player1_name, player2_name, player3_name, player1_icon, player2_icon, player1_role, player2_role, player3_role,
     player1_socketID, player2_socketID, player3_socketID, player1_advancedIcon, player2_advancedIcon, player1_IconColor, player2_IconColor, player1_timer, player2_timer, currentPlayer,
-    costumCoords, costumPatterns, costumIcon, killAllDrawnCells) {
+    costumCoords, costumPatterns, costumIcon, killAllDrawnCells, player1_id) {
 
     try {
         pool.query(`insert into roomdata (RoomID, xyCellAmount, InnerGameMode, PlayerTimer, fieldoptions,globalGameTimer ,isPlaying ,fieldIndex ,fieldTitle,
                 thirdPlayer,pointsToWin,win_patterns,players,player1_name,player2_name,player3_name,player1_icon,player2_icon,player1_role ,player2_role ,player3_role ,player1_socketID ,
                 player2_socketID ,player3_socketID ,player1_advancedIcon ,player2_advancedIcon ,player1_IconColor ,player2_IconColor ,player1_timer,player2_timer,currentPlayer, costumField, 
-                costumPatterns, costumIcon, killAllDrawnCells) 
+                costumPatterns, costumIcon, killAllDrawnCells, player1_id) 
         
-                values (?, ?, ?, ?, ?, ?, ?, ?,?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? , ?, ?, ?, ?, ?, ?)`,
+                values (?, ?, ?, ?, ?, ?, ?, ?,?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? , ?, ?, ?, ?, ?, ?, ?)`,
 
             [id, xyCellAmount, InnerGameMode, playerTimer, fieldoptions, globalGameTimer, isPlaying, fieldIndex, fieldTitle,
                 thirdPlayer, pointsToWin, win_patterns, playerAmount, player1_name, player2_name, player3_name, player1_icon, player2_icon, player1_role, player2_role, player3_role,
                 player1_socketID, player2_socketID, player3_socketID, player1_advancedIcon, player2_advancedIcon, player1_IconColor, player2_IconColor, player1_timer, player2_timer, currentPlayer,
-                JSON.stringify(costumCoords), JSON.stringify(costumPatterns), costumIcon, killAllDrawnCells
+                JSON.stringify(costumCoords), JSON.stringify(costumPatterns), costumIcon, killAllDrawnCells, player1_id
             ]
         );
     } catch (error) {
@@ -189,13 +189,13 @@ async function DeletePlayerClocks(eventName1, eventName2) {
 };
 
 // user joins the lobby => all data from the user needs to be added now
-async function UserJoinsRoom(GameID, UserName, icon, socketID, advancedIcon, IconColor) {
-    await pool.query(`update roomdata set player2_name = ?, player2_icon = ?, player2_socketID = ?, player2_advancedIcon = ?, player2_IconColor = ? where RoomID = ?`, [UserName, icon, socketID, advancedIcon, IconColor, GameID]);
+async function UserJoinsRoom(GameID, UserName, icon, socketID, advancedIcon, IconColor, player_id) {
+    await pool.query(`update roomdata set player2_name = ?, player2_icon = ?, player2_socketID = ?, player2_advancedIcon = ?, player2_IconColor = ?, player2_id = ? where RoomID = ?`, [UserName, icon, socketID, advancedIcon, IconColor, player_id, GameID]);
 };
 
 // third user (role: blocker) join the lobby => all data from the blocker needs to be added now
-async function BlockerJoinsRoom(GameID, BlockerName, socketID) {
-    await pool.query(`update roomdata set player3_name = ?, player3_socketID = ? where RoomID = ?`, [BlockerName, socketID, GameID]);
+async function BlockerJoinsRoom(GameID, BlockerName, socketID, player_id) {
+    await pool.query(`update roomdata set player3_name = ?, player3_socketID = ?, player3_id = ? where RoomID = ?`, [BlockerName, socketID, player_id, GameID]);
 };
 
 // user leaves the lobby => all data from the user needs to be reseted now
@@ -393,7 +393,9 @@ const CreateClan = async(clan_name, clan_logo, clan_description, player_data, cl
 
 // load new column to gameLogs
 const new_gamLog_entry = async(gameData) => {
-    let [row] = await database.pool.query(
+    console.log(gameData);
+
+    let [row] = await pool.query(
         `insert into gamelogs (
             level_id,
             level_name,
@@ -403,7 +405,7 @@ const new_gamLog_entry = async(gameData) => {
             p1_name,
             p2_name,
             p2_color,
-            p1_color
+            p1_color,
             p1_icon,
             p2_icon,
             p1_points,
@@ -424,7 +426,7 @@ const new_gamLog_entry = async(gameData) => {
             field_mode,
             kill_cells_after_point,
             max_amount_of_moves
-        ) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, ?, ?,?)`, [
+        ) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
             gameData[0],
             gameData[1],
             gameData[2],
@@ -452,7 +454,8 @@ const new_gamLog_entry = async(gameData) => {
             gameData[24],
             gameData[25],
             gameData[26],
-            gameData[27]
+            gameData[27],
+            gameData[28]
         ]
     );
 

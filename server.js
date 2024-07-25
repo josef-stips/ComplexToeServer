@@ -243,7 +243,7 @@ io.on('connection', socket => {
             // create room in database with given data
             await database.CreateRoom(parseInt(roomID), parseInt(GameData[2]), GameData[1], parseInt(GameData[0]), JSON.stringify([]), 0, false, parseInt(GameData[5]), GameData[6],
                 GameData[9], GameData[10], JSON.stringify(GameData[11]), 1, GameData[3], "", "", GameData[4], "", "admin", "user", "blocker",
-                socket.id, "", "", GameData[7], "", GameData[8], "", parseInt(GameData[0]), parseInt(GameData[0]), 1, GameData[12], GameData[13], GameData[14], GameData[15]);
+                socket.id, "", "", GameData[7], "", GameData[8], "", parseInt(GameData[0]), parseInt(GameData[0]), 1, GameData[12], GameData[13], GameData[14], GameData[15], GameData[16]);
 
             // Inform and update the page of all other people who are clients of the room about the name of the admin
             io.to(roomID).emit('Admin_Created_And_Joined', [GameData[3], GameData[4], GameData[7], GameData[9]]); // PlayerData[9] = third player as boolean
@@ -309,6 +309,7 @@ io.on('connection', socket => {
                 } else { // room is full
                     callback([`You can't join`]);
                 };
+
             } catch (error) {
                 callback(['no room found']);
                 console.log(error);
@@ -367,7 +368,7 @@ io.on('connection', socket => {
         if (data[5] == "user") {
             // save data about user in database
             // The 'role' is already declared when the room was created by the admin so it is not here
-            database.UserJoinsRoom(parseInt(data[0]), data[1], data[2], socket.id, data[3], data[4]); // name, icon, socket.id, advancedIcon, iconColor
+            database.UserJoinsRoom(parseInt(data[0]), data[1], data[2], socket.id, data[3], data[4], data[6]); // name, icon, socket.id, advancedIcon, iconColor
 
             // updates the html of all players in the room with the name and data of the second player
             io.to(parseInt(data[0])).emit('SecondPlayer_Joined', [data[1], data[2], data[3], data[4], thirdPlayer_bool, thirdPlayer_name, player1Name]); // second parameter => icon of second player
@@ -375,7 +376,7 @@ io.on('connection', socket => {
         } else if (data[5] == "blocker") {
             // save data in object
             // The 'role' is already declared when the room was created by the admin
-            database.BlockerJoinsRoom(parseInt(data[0]), data[1], socket.id);
+            database.BlockerJoinsRoom(parseInt(data[0]), data[1], socket.id, data[6]);
 
             // updates the html of all players in the room with the name and data of the third player
             io.to(parseInt(data[0])).emit('ThirdPlayer_Joined', [data[1], data[2], data[3], data[4], thirdPlayer_bool]); // second parameter => icon of second player
@@ -1628,7 +1629,8 @@ io.on('connection', socket => {
 
     socket.on("request_level_for_id", async(level_id, cb) => {
         let [results] = await database.pool.query(`select * from levels where id = ?`, [level_id]);
-        cb(results[0]);
+        let [creator_row] = await database.pool.query(`select * from players where player_id = ?`, [results[0].creator_id]);
+        cb(results[0], creator_row[0]);
     });
 
     socket.on("like_level", async(level_id, player_id, cb) => {
@@ -1736,13 +1738,27 @@ io.on('connection', socket => {
     });
 
     // get 100 best players
-    socket.on("top_100_players", async(cb) => {
+    socket.on("top_100_players_global", async(player_id, filter, cb) => {
         let [players] = await database.pool.query(`select * from players`);
+        let sort_func = filter == 'XP' ? compare_player_after_XP : filter == 'Games' ? compare_player_after_Games : compare_player;
 
-        players.sort(compare_player);
+        players.sort(sort_func);
         players = players.slice(-100);
 
         cb(players);
+    });
+
+    // get top 100 best friends
+    socket.on("top_100_players_local", async(player_id, filter, cb) => {
+        let [friends_row] = await database.pool.query(`select friends from players where player_id = ?`, [player_id]);
+        let friends = await Promise.all(JSON.parse(friends_row[0].friends).map(async id => await getDataById(Number(id))));
+        // console.log(friends);
+        let sort_func = filter == 'XP' ? compare_player_after_XP : filter == 'Games' ? compare_player_after_Games : compare_player;
+
+        friends.sort(sort_func);
+        friends = friends.slice(-100);
+
+        cb(friends);
     });
 
     // player updates clan data through joining a new clan
@@ -1854,12 +1870,12 @@ io.on('connection', socket => {
     // load from server when client wants to monitor his previuous games in a list f.ex
     socket.on("load_gameLog", async(player_id, cb) => {
         let [row] = await database.pool.query(`select * from gamelogs where p1_id = ? or p2_id = ?`, [player_id, player_id]);
-        cb(row[0]);
+        cb(row);
     });
 
     // when client played a new game and finished playing. load to table
     socket.on("update_gameLog", async(gameData, cb) => {
-        let [insertId] = await database.new_gamLog_entry(gameData);
+        let insertId = await database.new_gamLog_entry(gameData);
         cb(insertId);
     });
 });
@@ -2330,18 +2346,43 @@ function compare_players_level_data(a, b) {
 
 // compare players data 
 function compare_player(a, b) {
-
     const gamesWon1 = !a.onlineGamesWon ? 0 : a.onlineGamesWon
     const gamesWon2 = !b.onlineGamesWon ? 0 : b.onlineGamesWon;
-
-    const XP1 = !a.XP ? 0 : a.XP;
-    const XP2 = !b.XP ? 0 : b.XP;
 
     if (gamesWon1 !== gamesWon2) {
         return b.onlineGamesWon - a.onlineGamesWon;
     };
 
+    const XP1 = !a.XP ? 0 : a.XP;
+    const XP2 = !b.XP ? 0 : b.XP;
+
     if (XP1 !== XP2) {
+        return b.onlineGamesWon - a.onlineGamesWon;
+    };
+
+    if (a.player_id !== b.player_id) {
+        return a.player_id - b.player_id;
+    };
+};
+
+function compare_player_after_XP(a, b) {
+    const XP1 = !a.XP ? 0 : a.XP;
+    const XP2 = !b.XP ? 0 : b.XP;
+
+    if (XP1 !== XP2) {
+        return b.onlineGamesWon - a.onlineGamesWon;
+    };
+
+    if (a.player_id !== b.player_id) {
+        return a.player_id - b.player_id;
+    };
+};
+
+function compare_player_after_Games(a, b) {
+    const gamesWon1 = !a.onlineGamesWon ? 0 : a.onlineGamesWon
+    const gamesWon2 = !b.onlineGamesWon ? 0 : b.onlineGamesWon;
+
+    if (gamesWon1 !== gamesWon2) {
         return b.onlineGamesWon - a.onlineGamesWon;
     };
 
