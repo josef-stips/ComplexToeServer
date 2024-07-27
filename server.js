@@ -243,7 +243,7 @@ io.on('connection', socket => {
             // create room in database with given data
             await database.CreateRoom(parseInt(roomID), parseInt(GameData[2]), GameData[1], parseInt(GameData[0]), JSON.stringify([]), 0, false, parseInt(GameData[5]), GameData[6],
                 GameData[9], GameData[10], JSON.stringify(GameData[11]), 1, GameData[3], "", "", GameData[4], "", "admin", "user", "blocker",
-                socket.id, "", "", GameData[7], "", GameData[8], "", parseInt(GameData[0]), parseInt(GameData[0]), 1, GameData[12], GameData[13], GameData[14], GameData[15], GameData[16]);
+                socket.id, "", "", GameData[7], "", GameData[8], "", parseInt(GameData[0]), parseInt(GameData[0]), 1, GameData[12], GameData[13], GameData[14], GameData[15], GameData[16], GameData[17]);
 
             // Inform and update the page of all other people who are clients of the room about the name of the admin
             io.to(roomID).emit('Admin_Created_And_Joined', [GameData[3], GameData[4], GameData[7], GameData[9]]); // PlayerData[9] = third player as boolean
@@ -368,7 +368,7 @@ io.on('connection', socket => {
         if (data[5] == "user") {
             // save data about user in database
             // The 'role' is already declared when the room was created by the admin so it is not here
-            database.UserJoinsRoom(parseInt(data[0]), data[1], data[2], socket.id, data[3], data[4], data[6]); // name, icon, socket.id, advancedIcon, iconColor
+            database.UserJoinsRoom(parseInt(data[0]), data[1], data[2], socket.id, data[3], data[4], data[6], data[7]); // name, icon, socket.id, advancedIcon, iconColor
 
             // updates the html of all players in the room with the name and data of the second player
             io.to(parseInt(data[0])).emit('SecondPlayer_Joined', [data[1], data[2], data[3], data[4], thirdPlayer_bool, thirdPlayer_name, player1Name]); // second parameter => icon of second player
@@ -612,7 +612,7 @@ io.on('connection', socket => {
     });
 
     // user leaves lobby. if admin leaves lobby => room gets killes and all users in there gets kicked out
-    socket.on('user_left_lobby', async(user, roomID, kick_action, callback) => {
+    socket.on('user_left_lobby', async(user, roomID, callback) => {
         try {
             // general things
             if (user == 'admin') {
@@ -754,28 +754,28 @@ io.on('connection', socket => {
     });
 
     socket.on('kick_user_from_lobby', async(user_type, roomID, cb) => {
-        let [socket_row2] = await database.pool.query(`select player2_socketID from roomdata where RoomID = ?`, [parseInt(roomID)]);
-        let [socket_row3] = await database.pool.query(`select player3_socketID from roomdata where RoomID = ?`, [parseInt(roomID)]);
+        // let [socket_row2] = await database.pool.query(`select player2_socketID from roomdata where RoomID = ?`, [parseInt(roomID)]);
+        // let [socket_row3] = await database.pool.query(`select player3_socketID from roomdata where RoomID = ?`, [parseInt(roomID)]);
 
-        let p2_socketID = socket_row2[0].player2_socketID;
-        let p3_socketID = socket_row3[0].player3_socketID;
+        // let p2_socketID = socket_row2[0].player2_socketID;
+        // let p3_socketID = socket_row3[0].player3_socketID;
 
-        let all_sockets_in_room = await io.in(roomID).fetchSockets();
+        // let all_sockets_in_room = await io.in(roomID).fetchSockets();
 
         switch (user_type) {
             case 'user':
                 io.to(roomID).emit('lobby_kick', user_type);
 
-                let FoundSocket2 = findSocketById(all_sockets_in_room, p2_socketID);
-                FoundSocket2.leave(parseInt(roomID));
+                // let FoundSocket2 = findSocketById(all_sockets_in_room, p2_socketID);
+                // FoundSocket2.leave(parseInt(roomID));
                 break;
 
             case 'blocker':
 
                 io.to(roomID).emit('lobby_kick', user_type);
 
-                let FoundSocket3 = findSocketById(all_sockets_in_room, p3_socketID);
-                FoundSocket3.leave(parseInt(roomID));
+                // let FoundSocket3 = findSocketById(all_sockets_in_room, p3_socketID);
+                // FoundSocket3.leave(parseInt(roomID));
                 break;
         };
     });
