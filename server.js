@@ -612,7 +612,7 @@ io.on('connection', socket => {
     });
 
     // user leaves lobby. if admin leaves lobby => room gets killes and all users in there gets kicked out
-    socket.on('user_left_lobby', async(user, roomID, callback) => {
+    socket.on('user_left_lobby', async(user, roomID, kick_action, callback) => {
         try {
             // general things
             if (user == 'admin') {
@@ -654,8 +654,9 @@ io.on('connection', socket => {
                     callback('You killed the lobby');
                 };
 
-            } else if (user == 'user') { // user kicks himself from the lobby
-                // Check if they were in a game playing tic tac toe or not
+            } else if (user == 'user') { // user kicks himself from the lobby or gets kicked
+
+                // Check if they were in a game
                 let result;
                 try {
                     result = await database.pool.query(`select isPlaying from roomdata where RoomID = ?`, [parseInt(roomID)]);
@@ -689,6 +690,7 @@ io.on('connection', socket => {
                     return;
 
                 } else if (isPlaying == 0) { // If they were not playing
+
                     // user just leaves
                     socket.leave(parseInt(roomID));
 
@@ -748,6 +750,33 @@ io.on('connection', socket => {
 
         } catch (error) {
             console.log(error);
+        };
+    });
+
+    socket.on('kick_user_from_lobby', async(user_type, roomID, cb) => {
+        let [socket_row2] = await database.pool.query(`select player2_socketID from roomdata where RoomID = ?`, [parseInt(roomID)]);
+        let [socket_row3] = await database.pool.query(`select player3_socketID from roomdata where RoomID = ?`, [parseInt(roomID)]);
+
+        let p2_socketID = socket_row2[0].player2_socketID;
+        let p3_socketID = socket_row3[0].player3_socketID;
+
+        let all_sockets_in_room = await io.in(roomID).fetchSockets();
+
+        switch (user_type) {
+            case 'user':
+                io.to(roomID).emit('lobby_kick', user_type);
+
+                let FoundSocket2 = findSocketById(all_sockets_in_room, p2_socketID);
+                FoundSocket2.leave(parseInt(roomID));
+                break;
+
+            case 'blocker':
+
+                io.to(roomID).emit('lobby_kick', user_type);
+
+                let FoundSocket3 = findSocketById(all_sockets_in_room, p3_socketID);
+                FoundSocket3.leave(parseInt(roomID));
+                break;
         };
     });
 
@@ -915,7 +944,7 @@ io.on('connection', socket => {
         await database.DeletePlayerClocks(`player1_timer_event_${id}`, `player2_timer_event_${id}`);
 
         // send neccesary data to all clients in lobby
-        io.to(parseInt(id)).emit('global_UltimateWin', data[0], data[1], data[2], data[3], data[4]);
+        io.to(parseInt(id)).emit('global_UltimateWin', data[0], data[1], data[2], data[3], data[4], data[5]);
     });
 
     // admin calls global game timer which all clients recieve through this emit
@@ -2477,4 +2506,14 @@ function getClanLevel(clan_XP) {
     };
 
     return currentLevel;
+};
+
+function findSocketById(socketList, id) {
+    for (const socket of socketList) {
+        if (socket.id === id) {
+            return socket;
+        };
+    };
+
+    return null;
 };
