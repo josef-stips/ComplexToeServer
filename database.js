@@ -422,11 +422,14 @@ const new_gamLog_entry = async(gameData) => {
             player_clock,
             points_to_win,
             allowed_patterns,
+            costum_patterns,
             game_mode,
             field_mode,
             kill_cells_after_point,
-            max_amount_of_moves
-        ) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
+            max_amount_of_moves,
+            p3_id,
+            field_index
+        ) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
             gameData[0],
             gameData[1],
             gameData[2],
@@ -455,7 +458,10 @@ const new_gamLog_entry = async(gameData) => {
             gameData[25],
             gameData[26],
             gameData[27],
-            gameData[28]
+            gameData[28],
+            gameData[29],
+            gameData[30],
+            gameData[31],
         ]
     );
 
