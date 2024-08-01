@@ -428,8 +428,9 @@ const new_gamLog_entry = async(gameData) => {
             kill_cells_after_point,
             max_amount_of_moves,
             p3_id,
-            field_index
-        ) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
+            field_index,
+            music_name
+        ) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
             gameData[0],
             gameData[1],
             gameData[2],
@@ -462,6 +463,7 @@ const new_gamLog_entry = async(gameData) => {
             gameData[29],
             gameData[30],
             gameData[31],
+            gameData[32]
         ]
     );
 
