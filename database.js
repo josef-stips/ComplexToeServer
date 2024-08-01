@@ -429,8 +429,9 @@ const new_gamLog_entry = async(gameData) => {
             max_amount_of_moves,
             p3_id,
             field_index,
-            music_name
-        ) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
+            music_name,
+            boneyard_arr
+        ) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
             gameData[0],
             gameData[1],
             gameData[2],
@@ -463,7 +464,8 @@ const new_gamLog_entry = async(gameData) => {
             gameData[29],
             gameData[30],
             gameData[31],
-            gameData[32]
+            gameData[32],
+            gameData[33]
         ]
     );
 
