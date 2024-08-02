@@ -147,11 +147,8 @@ io.on('connection', socket => {
         // about clan rooms
         let rooms = [...socket.rooms];
 
-        console.log(rooms, "dfsdfsafggfggfdggsfd");
-
         rooms.forEach(room => {
             if (isNaN(room)) {
-
                 io.to(room).emit('player_leaves_clan_room', 74);
             };
         });
@@ -164,7 +161,7 @@ io.on('connection', socket => {
         // if it belongs to a room check which role he played and do the specified things
         if (data[0] == "admin") {
             // Delete the room from database
-            kill_room(data[1].RoomID)
+            kill_room(data[1].RoomID);
 
             // delete the room from the server and inform the other player (user) in the room about it
             io.to(data[1].RoomID).emit('INFORM_admin_left_room');
@@ -1345,6 +1342,8 @@ io.on('connection', socket => {
 
     // Of Online Game for all players in the lobby the background color of the game changes
     socket.on("ChangeBGColor", async(GameID, bgcolor1, bgcolor2) => {
+        await database.pool.query(`update roomdata set bgcolor1 = ?, bgcolor2 = ? where RoomID = ?`, [bgcolor1, bgcolor2, GameID]);
+
         io.to(GameID).emit("GetBgcolors", bgcolor1, bgcolor2);
     });
 
@@ -1906,6 +1905,48 @@ io.on('connection', socket => {
     socket.on("update_gameLog", async(gameData, cb) => {
         let insertId = await database.new_gamLog_entry(gameData);
         cb(insertId);
+    });
+
+    // client requests all rooms that are playing atm and allowed watching
+    socket.on('get_curr_online_games', async(cb) => {
+        try {
+            // Fetch all the rooms where can_watch is 1
+            let [rooms] = await database.pool.query(`SELECT * FROM roomdata WHERE can_watch = 1 AND isPlaying = 1`);
+            // let [rooms] = await database.pool.query(`SELECT * FROM roomdata WHERE can_watch = 1`);
+
+            // Fetch player data for each room
+            const fetchPlayerDataPromises = rooms.map(async(room) => {
+                const [playerDataRows] = await database.pool.query(
+                    `SELECT * FROM players WHERE player_id IN (?, ?, ?)`, [room.player1_id, room.player2_id, room.player3_id]
+                );
+                room.player_data_rows = playerDataRows;
+                return room;
+            });
+
+            // Wait for all player data queries to complete
+            const roomsWithPlayerData = await Promise.all(fetchPlayerDataPromises);
+
+            // Callback with the rooms containing player data
+            cb(roomsWithPlayerData);
+
+        } catch (error) {
+
+            console.error('Error fetching current online games:', error);
+            cb({ error: 'Failed to fetch current online games' });
+        };
+    });
+
+    // client requests to watch a selected game
+    socket.on('try_to_watch_game', async(roomID) => {
+        try {
+            let [row] = await database.pool.query(`SELECT * FROM roomdata WHERE roomID = ? AND can_watch = 1 AND isPlaying = 1`, [roomID]);
+            row && socket.join(roomID);
+            cb({ success: true });
+
+        } catch (error) {
+            console.error('Error fetching selected online game to watch:', error);
+            cb({ error: 'Error fetching selected online game to watch' });
+        };
     });
 });
 
