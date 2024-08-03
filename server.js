@@ -1948,6 +1948,16 @@ io.on('connection', socket => {
             cb({ error: 'Error fetching selected online game to watch' });
         };
     });
+
+    // on sub win in online game: update player points in db
+    socket.on('update_game_points', async(room_id, p1_points, p2_points) => {
+        try {
+            await database.pool.query(`update roomdata set p1_points = ?, p2_points = ? where roomID = ?`, [p1_points, p2_points, room_id]);
+
+        } catch (error) {
+            console.log(error);
+        };
+    });
 });
 
 // player reacts to comment under a level
