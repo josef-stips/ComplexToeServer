@@ -240,7 +240,7 @@ io.on('connection', socket => {
             // create room in database with given data
             await database.CreateRoom(parseInt(roomID), parseInt(GameData[2]), GameData[1], parseInt(GameData[0]), JSON.stringify([]), 0, false, parseInt(GameData[5]), GameData[6],
                 GameData[9], GameData[10], JSON.stringify(GameData[11]), 1, GameData[3], "", "", GameData[4], "", "admin", "user", "blocker",
-                socket.id, "", "", GameData[7], "", GameData[8], "", parseInt(GameData[0]), parseInt(GameData[0]), 1, GameData[12], GameData[13], GameData[14], GameData[15], GameData[16], GameData[17]);
+                socket.id, "", "", GameData[7], "", GameData[8], "", parseInt(GameData[0]), parseInt(GameData[0]), 1, GameData[12], GameData[13], GameData[14], GameData[15], GameData[16], GameData[17], GameData[18]);
 
             // Inform and update the page of all other people who are clients of the room about the name of the admin
             io.to(roomID).emit('Admin_Created_And_Joined', [GameData[3], GameData[4], GameData[7], GameData[9]]); // PlayerData[9] = third player as boolean
@@ -251,6 +251,10 @@ io.on('connection', socket => {
             console.log("A room with this id already exists")
         };
     };
+
+    socket.on('update_room_x_and_y', async(roomID, x_and_y) => {
+        await database.pool.query(`update roomdata set x_and_y = ? where RoomID = ?`, [JSON.stringify(x_and_y), roomID]);
+    });
 
     // try to enter a room. If room exists, the player enters the room but still needs to confirm his user data
     socket.on('TRY_enter_room', async(GameID, callback) => { // the id the user parsed into the input field
@@ -461,7 +465,7 @@ io.on('connection', socket => {
                 let PlayerTimeRequestInterval = setInterval(async() => {
                     try {
                         // request player timers and the current player timer from database
-                        var results = await database.pool.query(`select player1_timer , player2_timer, currentPlayer, eyeAttackInterval, PlayerTimer from roomdata where RoomID = ?;`, [parseInt(Data[0])]);
+                        var results = await database.pool.query(`select player1_timer , player2_timer, currentPlayer, eyeAttackInterval, PlayerTimer, watching_count from roomdata where RoomID = ?;`, [parseInt(Data[0])]);
 
                     } catch (error) {
                         console.log(error);
@@ -526,7 +530,7 @@ io.on('connection', socket => {
                         };
 
                         // ---------------- all players recieve player timer directly from database ----------------
-                        io.to(parseInt(Data[0])).emit('playerTimer', player1Timer, player2Timer, currentPlayer);
+                        io.to(parseInt(Data[0])).emit('playerTimer', player1Timer, player2Timer, currentPlayer, results[0][0].watching_count);
 
                         // console.log(player1Timer, player2Timer, currentPlayer, eyeAttackInterval, eyeAttackInterval_bool);
 
@@ -748,6 +752,12 @@ io.on('connection', socket => {
         } catch (error) {
             console.log(error);
         };
+    });
+
+    socket.on('watcher_left_game', async(id, cb) => {
+        socket.leave(id);
+        await database.pool.query(`update roomdata set watching_count = watching_count - 1 where RoomID = ?`, [id]);
+        cb(id);
     });
 
     socket.on('kick_user_from_lobby', async(user_type, roomID, cb) => {
@@ -1937,11 +1947,19 @@ io.on('connection', socket => {
     });
 
     // client requests to watch a selected game
-    socket.on('try_to_watch_game', async(roomID) => {
+    socket.on('try_to_watch_game', async(roomID, cb) => {
         try {
             let [row] = await database.pool.query(`SELECT * FROM roomdata WHERE roomID = ? AND can_watch = 1 AND isPlaying = 1`, [roomID]);
-            row && socket.join(roomID);
-            cb({ success: true });
+            let success = false;
+
+            if (row) {
+                success = true;
+                socket.join(roomID);
+
+                await database.pool.query(`update roomdata set watching_count = ? where RoomID = ?`, [row[0].watching_count + 1, roomID]);
+            };
+
+            await cb({ success: row ? true : false });
 
         } catch (error) {
             console.error('Error fetching selected online game to watch:', error);
@@ -1957,6 +1975,10 @@ io.on('connection', socket => {
         } catch (error) {
             console.log(error);
         };
+    });
+
+    socket.on('update_can_watch_game', async(id, bool) => {
+        await database.pool.query(`update roomdata set can_watch = ? where RoomID = ?`, [bool, id]);
     });
 });
 
