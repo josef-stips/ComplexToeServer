@@ -445,7 +445,7 @@ io.on('connection', socket => {
                 let Roomdata = await database.pool.query(`select * from roomdata where RoomID = ?`, [parseInt(Data[0])]);
 
                 // check if the players are playing with the eye boss. The eye has an interval (he attacks every minute)
-                if (Roomdata[0][0].fieldTitle == "Merciful slaughter note: this is code is not used currently. Do not touch without required knowleadge.") {
+                if (Roomdata[0][0].fieldTitle == "Merciful slaughter note: this code is not used currently. Do not touch without required knowleadge.") {
                     // initialize eye counter in database (give it a value)
                     await database.pool.query(`update roomdata set eyeAttackInterval = 60 where roomID = ?`, [parseInt(Data[0])]);
                     // start eye attack interval
@@ -457,6 +457,8 @@ io.on('connection', socket => {
 
                 // sends all room data (game, player) to both clients so everything in the game is the same and synchronised
                 io.to(parseInt(Data[0])).emit('StartGame', Roomdata[0]);
+
+                await database.pool.query(`update roomdata set win_combinations = JSON_ARRAY(),p1_points = 0, p2_points = 0 where RoomID = ?`, [parseInt(roomID)]);
 
                 // start player clock for the first player
                 await database.StartPlayerClock(`player1_timer_event_${Data[0]}`, parseInt(Data[0]), "player1_timer", 1);
@@ -613,8 +615,10 @@ io.on('connection', socket => {
     });
 
     // user leaves lobby. if admin leaves lobby => room gets killes and all users in there gets kicked out
-    socket.on('user_left_lobby', async(user, roomID, callback) => {
+    socket.on('user_left_lobby', async(user, roomID, from_continue_btn, callback) => {
         try {
+            await database.pool.query(`update roomdata set win_combinations = JSON_ARRAY(),p1_points = 0, p2_points = 0 where RoomID = ?`, [parseInt(roomID)]);
+
             // general things
             if (user == 'admin') {
                 // Check if they were in a game playing tic tac toe or not
@@ -629,7 +633,7 @@ io.on('connection', socket => {
                     // send message to the admin and especially to all other clients that the game is killed
                     // so they are just in the lobby again
                     // the room is still existing with all clients
-                    io.to(roomID).emit('killed_game');
+                    io.to(roomID).emit('killed_game', from_continue_btn);
 
                     // They do not play anymore
                     await database.pool.query(`update roomdata set isPlaying = 0 where RoomID = ?`, [parseInt(roomID)]);
@@ -798,27 +802,28 @@ io.on('connection', socket => {
             let Index = data[1][i][RIndex]
 
             // options index value to unknown zeichen
-            data[2][Index] = '%%';
+            data[2][Index] = "%%";
         };
 
         // update global options array
-        await database.pool.query(`update roomdata set Fieldoptions = ? where RoomID = ?`, [JSON.stringify(data[2]), parseInt(data[0])]);
-        let Fieldoptions = await database.pool.query(`select Fieldoptions from roomdata where RoomID = ?`, [parseInt(data[0])]);
+        await database.pool.query(`update roomdata set boneyard_arr = ? where RoomID = ?`, [JSON.stringify(data[2]), parseInt(data[0])]);
+        let Fieldoptions = await database.pool.query(`select boneyard_arr from roomdata where RoomID = ?`, [parseInt(data[0])]);
 
         // send modified global options array to every client in room
-        io.to(parseInt(data[0])).emit('recieveGlobalOptions', JSON.parse(Fieldoptions[0][0].Fieldoptions));
+        io.to(parseInt(data[0])).emit('recieveGlobalOptions', Fieldoptions[0][0].boneyard_arr);
     });
 
+    // legacy:
     // Just a small thing so all '%%' character from the global options array are getting deleted
     socket.on('BoneyardFinalProcess', async id => {
-        let Fieldoptions = await database.pool.query(`select Fieldoptions from roomdata where RoomID = ?`, [parseInt(id)]);
+        // let Fieldoptions = await database.pool.query(`select Fieldoptions from roomdata where RoomID = ?`, [parseInt(id)]);
 
-        let options = JSON.parse(Fieldoptions[0][0].Fieldoptions);
-        for (let i = 0; i < options.length; i++) {
-            options[i] = '';
-        };
+        // let options = JSON.parse(Fieldoptions[0][0].Fieldoptions);
+        // for (let i = 0; i < options.length; i++) {
+        //     options[i] = '';
+        // };
 
-        await database.pool.query(`update roomdata set Fieldoptions = ? where RoomID = ?`, [JSON.stringify(options), parseInt(id)]);
+        // await database.pool.query(`update roomdata set Fieldoptions = ? where RoomID = ?`, [JSON.stringify(options), parseInt(id)]);
     });
 
     // Only the admin can reload the game
@@ -992,9 +997,9 @@ io.on('connection', socket => {
 
     // admin changed required amount of points to win a game dynamically in the lobby
     socket.on("AdminChangesPointsToWin_InLobby", async(id, value) => {
-        await database.pool.query(`update roomdata set pointsToWin = ? where RoomID = ?`, [parseInt(value), parseInt(id)]);
+        await database.pool.query(`update roomdata set pointsToWin = ? where RoomID = ?`, [Number(value), parseInt(id)]);
 
-        io.to(parseInt(id)).emit("AdminChanged_PointsToWin", value);
+        io.to(parseInt(id)).emit("AdminChanged_PointsToWin", Number(value));
     });
 
     // user who joins the lobby wants to know how many points are required to win a game
@@ -1907,7 +1912,7 @@ io.on('connection', socket => {
 
     // load from server when client wants to monitor his previuous games in a list f.ex
     socket.on("load_gameLog", async(player_id, cb) => {
-        let [row] = await database.pool.query(`select * from gamelogs where p1_id = ? or p2_id = ?`, [player_id, player_id]);
+        let [row] = await database.pool.query(`select * from gamelogs where p1_id = ? or p2_id = ? or p3_id = ?`, [player_id, player_id, player_id]);
         cb(row);
     });
 
@@ -1968,9 +1973,11 @@ io.on('connection', socket => {
     });
 
     // on sub win in online game: update player points in db
-    socket.on('update_game_points', async(room_id, p1_points, p2_points) => {
+    socket.on('update_game_points', async(room_id, p1_points, p2_points, win_combination) => {
+        console.log("winning lololololloolololooololoool: ", win_combination, JSON.stringify(win_combination))
+
         try {
-            await database.pool.query(`update roomdata set p1_points = ?, p2_points = ? where roomID = ?`, [p1_points, p2_points, room_id]);
+            await database.pool.query(`update roomdata set p1_points = ?, p2_points = ?,win_combinations = JSON_ARRAY_APPEND(IFNULL(win_combinations, '[]'), '$', ?)  where roomID = ?`, [p1_points, p2_points, JSON.stringify(win_combination), room_id]);
 
         } catch (error) {
             console.log(error);
