@@ -71,7 +71,11 @@ io.on('connection', socket => {
     io.to(socket.id).emit('CheckIfPlayerAlreadyExists');
 
     // Player already was in the game
-    socket.on("PlayerAlreadyExists", async(PlayerID, treasureIsAvailible) => {
+    socket.on("PlayerAlreadyExists", async(PlayerID, treasureIsAvailible, cb) => {
+
+        let [row] = await database.pool.query(`select banned from players where player_id = ?`, [parseInt(PlayerID)]);
+
+        if (row[0].banned) cb(row[0].banned);
 
         // If the player already exists, a countdown (interval) is playing in the background in the database already
         // Check if the countdown is done
@@ -90,8 +94,11 @@ io.on('connection', socket => {
                 io.to(socket.id).emit('availible-treasure-NOT', datetime);
             };
 
+            cb(false);
+
             // treasure is open but user doesn't opened it in his last log in
         } else if (treasureIsAvailible == "true") {
+            cb(false);
             return;
         };
 
@@ -1421,7 +1428,14 @@ io.on('connection', socket => {
 
     // user searches for clans
     socket.on("clan_search", async(query, cb) => {
-        let [result] = await database.pool.query(`select * from clans where name = ?`, [query]);
+        let result;
+
+        if (!isNaN(Number(query))) {
+            [result] = await database.pool.query(`select * from clans where id = ?`, [Number(query)]);
+
+        } else {
+            [result] = await database.pool.query(`select * from clans where name = ?`, [query]);
+        };
 
         cb(result);
     });
