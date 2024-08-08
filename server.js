@@ -247,7 +247,7 @@ io.on('connection', socket => {
             // create room in database with given data
             await database.CreateRoom(parseInt(roomID), parseInt(GameData[2]), GameData[1], parseInt(GameData[0]), JSON.stringify([]), 0, false, parseInt(GameData[5]), GameData[6],
                 GameData[9], GameData[10], JSON.stringify(GameData[11]), 1, GameData[3], "", "", GameData[4], "", "admin", "user", "blocker",
-                socket.id, "", "", GameData[7], "", GameData[8], "", parseInt(GameData[0]), parseInt(GameData[0]), 1, GameData[12], GameData[13], GameData[14], GameData[15], GameData[16], GameData[17], GameData[18]);
+                socket.id, "", "", GameData[7], "", GameData[8], "", parseInt(GameData[0]), parseInt(GameData[0]), 1, GameData[12], GameData[13], GameData[14], GameData[15], GameData[16], GameData[17], GameData[18], GameData[19]);
 
             // Inform and update the page of all other people who are clients of the room about the name of the admin
             io.to(roomID).emit('Admin_Created_And_Joined', [GameData[3], GameData[4], GameData[7], GameData[9]]); // PlayerData[9] = third player as boolean
@@ -1642,10 +1642,13 @@ io.on('connection', socket => {
     });
 
     socket.on("update_online_level_data", async(won, time, points, player_id, level_id, patterns_used, cb) => {
+        console.log(won, time, points, player_id, level_id, patterns_used, "iopsfjgioasjgopiföjgpködsjfklöjgnlösdkjgökfdjglkösdjklgjsdöklgjdsfökjgsdölkjgklsdfgjöklsdgöklsj")
+
         let [result] = await database.pool.query(`select points_made, best_time, beat, beat_date from players_level_data 
         where player_id = ? and level_id = ?`, [player_id, level_id]);
 
         let data = result[0];
+
         let newData = {
             points: null,
             best_time: null,
@@ -1653,19 +1656,31 @@ io.on('connection', socket => {
             beat_date: null
         };
 
-        newData.points = Math.max(data["points_made"], points);
-        newData.best_time = data["best_time"] != 0 && data["best_time"] ? Math.min(data["best_time"], time) : time;
-        newData.beat = data["beat"] == null ? won : won == true ? won : data["beat"];
-        newData.beat_date = data["beat_date"] == null && won ? new Date() : data["beat_date"];
-        // console.log(newData);
+        if (!data) {
+            newData = {
+                points: points,
+                best_time: time,
+                beat: won,
+                beat_date: new Date()
+            };
 
-        await database.pool.query(`update players_level_data set 
+            await database.pool.query(`insert into players_level_data (player_id, level_id, points_made, best_time, beat, beat_date) values (?,?,?,?,?,?)
+            `, [player_id, level_id, newData.points, newData.best_time, newData.beat, newData.beat_date]);
 
-            points_made = ?,
-            best_time = ?,
-            beat = ?,
-            beat_date = ? where level_id = ? and player_id = ?
-        `, [newData.points, newData.best_time, newData.beat, newData.beat_date, level_id, player_id]);
+        } else {
+            newData.points = Math.max(data["points_made"], points);
+            newData.best_time = data["best_time"] != 0 && data["best_time"] ? Math.min(data["best_time"], time) : time;
+            newData.beat = data["beat"] == null ? won : won == true ? won : data["beat"];
+            newData.beat_date = data["beat_date"] == null && won ? new Date() : data["beat_date"];
+
+            await database.pool.query(`update players_level_data set 
+
+                points_made = ?,
+                best_time = ?,
+                beat = ?,
+                beat_date = ? where level_id = ? and player_id = ?
+            `, [newData.points, newData.best_time, newData.beat, newData.beat_date, level_id, player_id]);
+        };
 
         // next, update columns of table levels 
         let [level_results] = await database.pool.query(`select used_patterns from levels where id = ?`, [level_id]);
