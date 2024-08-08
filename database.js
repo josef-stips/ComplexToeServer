@@ -322,8 +322,8 @@ const SaveNewLevel = async(id, levelData) => {
     if (levelData.id != 0) {
         // overwrite already existing level in database with given id
         let [rows] = await pool.query(`update levels set level_status = ?, field = ?, level_name = ?, creator_id = ?, bg_music = ?, bg1 = ?, bg2 = ?, required_points = ?,
-        player_timer = ?, icon = ?, pattern = ?, costum_patterns = ?, costum_field = ? where id = ?`, [levelData.status, levelData.cellgrid, levelData.name, parseInt(id), levelData.bgmusic, levelData.bgcolor1, levelData.bgcolor2, levelData.requiredpoints, levelData.playertimer,
-            levelData.levelicon, JSON.stringify(levelData.allowedpatterns), JSON.stringify(levelData.costumPatterns), JSON.stringify(levelData.costumField), levelData.id
+        player_timer = ?, icon = ?, pattern = ?, costum_patterns = ?, costum_field = ?, bot_mode = ?, bot_patterns = ? where id = ?`, [levelData.status, levelData.cellgrid, levelData.name, parseInt(id), levelData.bgmusic, levelData.bgcolor1, levelData.bgcolor2, levelData.requiredpoints, levelData.playertimer,
+            levelData.levelicon, JSON.stringify(levelData.allowedpatterns), JSON.stringify(levelData.costumPatterns), JSON.stringify(levelData.costumField), levelData.BotMode, JSON.stringify(levelData.BotPatterns), levelData.id,
         ]);
 
         console.log(rows, levelData.id);
@@ -334,9 +334,9 @@ const SaveNewLevel = async(id, levelData) => {
         let [date] = await pool.query(`select current_date`);
 
         // write complete new level in database and generate new id
-        let [rows] = await pool.query(`insert into levels (level_status, field, level_name, creator_id, bg_music, bg1, bg2, required_points, player_timer, icon, pattern, creation_date, costum_patterns, costum_field) values 
-        (?,?,?,?,?,?,?,?,?,?,?,?,?, ?)`, [levelData.status, levelData.cellgrid, levelData.name, parseInt(id), levelData.bgmusic, levelData.bgcolor1, levelData.bgcolor2, levelData.requiredpoints, levelData.playertimer,
-            levelData.levelicon, JSON.stringify(levelData.allowedpatterns), JSON.stringify(date[0]["current_date"]), JSON.stringify(levelData.costumPatterns), JSON.stringify(levelData.costumField)
+        let [rows] = await pool.query(`insert into levels (level_status, field, level_name, creator_id, bg_music, bg1, bg2, required_points, player_timer, icon, pattern, creation_date, costum_patterns, costum_field, bot_mode, bot_patterns) values 
+        (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [levelData.status, levelData.cellgrid, levelData.name, parseInt(id), levelData.bgmusic, levelData.bgcolor1, levelData.bgcolor2, levelData.requiredpoints, levelData.playertimer,
+            levelData.levelicon, JSON.stringify(levelData.allowedpatterns), JSON.stringify(date[0]["current_date"]), JSON.stringify(levelData.costumPatterns), JSON.stringify(levelData.costumField), levelData.BotMode, JSON.stringify(levelData.BotPatterns)
         ]);
 
         console.log(rows);
