@@ -90,25 +90,53 @@ async function PlayerUpdatesData(player_id, newName, newIcon, playerInfoClass, p
 async function CreateRoom(id, xyCellAmount, InnerGameMode, playerTimer, fieldoptions, globalGameTimer, isPlaying, fieldIndex, fieldTitle,
     thirdPlayer, pointsToWin, win_patterns, playerAmount, player1_name, player2_name, player3_name, player1_icon, player2_icon, player1_role, player2_role, player3_role,
     player1_socketID, player2_socketID, player3_socketID, player1_advancedIcon, player2_advancedIcon, player1_IconColor, player2_IconColor, player1_timer, player2_timer, currentPlayer,
-    costumCoords, costumPatterns, costumIcon, killAllDrawnCells, player1_id, p1_XP, curr_music_name, level_id) {
+    costumCoords, costumPatterns, costumIcon, killAllDrawnCells, player1_id, p1_XP, curr_music_name, level_id, is_random_player_lobby, x_and_y) {
 
     try {
         pool.query(`insert into roomdata (RoomID, xyCellAmount, InnerGameMode, PlayerTimer, fieldoptions,globalGameTimer ,isPlaying ,fieldIndex ,fieldTitle,
                 thirdPlayer,pointsToWin,win_patterns,players,player1_name,player2_name,player3_name,player1_icon,player2_icon,player1_role ,player2_role ,player3_role ,player1_socketID ,
                 player2_socketID ,player3_socketID ,player1_advancedIcon ,player2_advancedIcon ,player1_IconColor ,player2_IconColor ,player1_timer,player2_timer,currentPlayer, costumField, 
-                costumPatterns, costumIcon, killAllDrawnCells, player1_id, p1_XP, curr_music_name, level_id) 
+                costumPatterns, costumIcon, killAllDrawnCells, player1_id, p1_XP, curr_music_name, level_id, is_random_player_lobby, x_and_y) 
         
-                values (?, ?, ?, ?, ?, ?, ?, ?,?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? , ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                values (?, ?, ?, ?, ?, ?, ?, ?,?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? , ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?)`,
 
             [id, xyCellAmount, InnerGameMode, playerTimer, fieldoptions, globalGameTimer, isPlaying, fieldIndex, fieldTitle,
                 thirdPlayer, pointsToWin, win_patterns, playerAmount, player1_name, player2_name, player3_name, player1_icon, player2_icon, player1_role, player2_role, player3_role,
                 player1_socketID, player2_socketID, player3_socketID, player1_advancedIcon, player2_advancedIcon, player1_IconColor, player2_IconColor, player1_timer, player2_timer, currentPlayer,
-                JSON.stringify(costumCoords), JSON.stringify(costumPatterns), costumIcon, killAllDrawnCells, player1_id, p1_XP, curr_music_name, level_id
+                JSON.stringify(costumCoords), JSON.stringify(costumPatterns), costumIcon, killAllDrawnCells, player1_id, p1_XP, curr_music_name, level_id, is_random_player_lobby, JSON.stringify(x_and_y)
             ]
         );
     } catch (error) {
 
         console.error(error);
+    };
+};
+
+async function SetUpWaitingEntry(p1_xp, p1_id, room_id) {
+    try {
+        let [insertId] = await pool.query(`insert into waiting_list (creator_id, creator_xp, room_id) values (?,?,?)`, [p1_id, p1_xp, room_id]);
+        return insertId;
+
+    } catch (error) {
+        return error
+    };
+};
+
+async function RemoveWaitingEntry(creator_id, room_id) {
+    try {
+        let column = creator_id ? 'creator_id' : 'room_id';
+        let value = creator_id || room_id;
+
+        if (['creator_id', 'room_id'].includes(column)) {
+            // Führe die Abfrage aus
+            await pool.query(`DELETE FROM waiting_list WHERE ${column} = ?`, [value]);
+
+        } else {
+            throw new Error('Invalid column name');
+        };
+
+    } catch (error) {
+        console.log(error);
     };
 };
 
@@ -512,5 +540,7 @@ module.exports = {
     SearchPlayers: SearchPlayers,
     SaveNewLevel,
     CreateClan,
-    new_gamLog_entry
+    new_gamLog_entry,
+    SetUpWaitingEntry,
+    RemoveWaitingEntry
 };
