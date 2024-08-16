@@ -873,8 +873,8 @@ io.on('connection', socket => {
 
     // user requests the allowed patterns so they display on the lobby for him
     socket.on("Request_AllowedPatterns", async(id, cb) => {
-        let WinPatterns = await database.pool.query(`select win_patterns from roomdata where RoomID = ?`, [parseInt(id)]);
-        cb(JSON.parse(WinPatterns[0][0].win_patterns));
+        let WinPatterns = await database.pool.query(`select win_patterns, costumPatterns from roomdata where RoomID = ?`, [parseInt(id)]);
+        cb(JSON.parse(WinPatterns[0][0].win_patterns), WinPatterns[0][0].costumPatterns);
     });
 
     // admin changed the allowed patterns in the lobby => update all player in lobby
@@ -1199,8 +1199,8 @@ io.on('connection', socket => {
 
     // User saves his level in database
     socket.on("SaveCurrentLevel", async(PlayerID, LevelData, cb) => {
-        let level_id = await database.SaveNewLevel(PlayerID, LevelData);
 
+        let level_id = await database.SaveNewLevel(PlayerID, LevelData);
         cb(level_id);
     });
 
@@ -1859,8 +1859,6 @@ io.on('connection', socket => {
 
     // on sub win in online game: update player points in db
     socket.on('update_game_points', async(room_id, p1_points, p2_points, win_combination) => {
-        console.log("winning lololololloolololooololoool: ", win_combination, JSON.stringify(win_combination))
-
         try {
             await database.pool.query(`update roomdata set p1_points = ?, p2_points = ?,win_combinations = JSON_ARRAY_APPEND(IFNULL(win_combinations, '[]'), '$', ?)  where roomID = ?`, [p1_points, p2_points, JSON.stringify(win_combination), room_id]);
 
@@ -1889,6 +1887,17 @@ io.on('connection', socket => {
             console.log(error);
             cb([], null);
         };
+    });
+
+    socket.on('create_clan_tournament', async(tournamet_data, clan_id, player_id, cb) => {
+        let { success } = await database.CreateClanTournament(tournamet_data, clan_id, player_id);
+
+        cb(success);
+    });
+
+    socket.on('load_tournaments', async(clan_data, cb) => {
+        let [rows] = await database.pool.query(`select * from tournaments where clan_id = ?`, [clan_data.clan_id]);
+        cb(rows);
     });
 });
 

@@ -500,6 +500,48 @@ const new_gamLog_entry = async(gameData) => {
     return row.insertId;
 };
 
+async function CreateClanTournament(data, clan_id, player_id) {
+    try {
+        const formattedStartDate = moment(data.startDate).format('YYYY-MM-DD HH:mm:ss');
+        const formattedEndDate = moment(data.endDate).format('YYYY-MM-DD HH:mm:ss');
+
+        const q = `INSERT INTO tournaments (
+            name, initiator, allowed_amount, participant_amount, participants, 
+            start_date, finish_date, gems_to_put_in_pot, pot_value, allowed_patterns,
+            current_state, player_clock, field_size, points_to_win, clan_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+
+        pool.query(q, [
+            data.name,
+            player_id,
+            data.participants,
+            0,
+            JSON.stringify([]),
+            formattedStartDate,
+            formattedEndDate,
+            data.gemsInPot,
+            0,
+            JSON.stringify(data.allowedPatterns),
+            JSON.stringify([]),
+            data.playerClock,
+            data.fieldSize,
+            data.pointsToGet,
+            clan_id
+
+        ]).then(([rows]) => {
+            console.log(rows);
+        }).catch(err => {
+            console.error(err);
+        });
+
+        return { success: true };
+
+    } catch (error) {
+        console.error(error);
+        return { success: false };
+    };
+};
+
 // try to log functions
 async function main() {
     try {
@@ -542,5 +584,6 @@ module.exports = {
     CreateClan,
     new_gamLog_entry,
     SetUpWaitingEntry,
-    RemoveWaitingEntry
+    RemoveWaitingEntry,
+    CreateClanTournament
 };
