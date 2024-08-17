@@ -522,7 +522,7 @@ async function CreateClanTournament(data, clan_id, player_id) {
             data.gemsInPot,
             0,
             JSON.stringify(data.allowedPatterns),
-            JSON.stringify([]),
+            JSON.stringify(data.tree_structure),
             data.playerClock,
             data.fieldSize,
             data.pointsToGet,
