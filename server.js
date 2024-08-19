@@ -1891,7 +1891,6 @@ io.on('connection', socket => {
 
     socket.on('create_clan_tournament', async(tournamet_data, clan_id, player_id, cb) => {
         let { success } = await database.CreateClanTournament(tournamet_data, clan_id, player_id);
-
         cb(success);
     });
 
@@ -1899,7 +1898,61 @@ io.on('connection', socket => {
         let [rows] = await database.pool.query(`select * from tournaments where clan_id = ?`, [clan_data.clan_id]);
         cb(rows);
     });
+
+    // player wants to join his clan's clan tournament
+    socket.on('contribute_to_put_and_participate', async(amount, tournament_id, player_id, cb) => {
+        try {
+            let [rows] = await database.pool.query(`select * from tournaments where id = ?`, [tournament_id]);
+
+            if (rows[0].participant_amount >= rows[0].allowed_amount) {
+                cb(false, 'The tournament is full.');
+                return;
+            };
+
+            let [{ serverStatus }] = await database.pool.query(
+                `update tournaments set participants = JSON_ARRAY_APPEND(IFNULL(participants, '[]'), '$', ?), pot_value = pot_value + ?, 
+                participant_amount = participant_amount + 1 where id = ?`, [player_id, amount, tournament_id]);
+
+            let [rowsNew] = await database.pool.query(`select * from tournaments where id = ?`, [tournament_id]);
+
+            // Add player to the next free space in the first column of the matches
+            let tree_result = await add_player_to_tournament_tree(rowsNew[0], player_id);
+            if (!tree_result) cb(false, 'The tournament is full.');
+
+            cb(serverStatus, 'You have successfully joined the tournament!', rowsNew[0]);
+
+        } catch (error) {
+            console.log(error);
+            cb(false, 'Something went wrong. Try again later.');
+        };
+    });
 });
+
+// On player joins tournament: Add player to the next free space in the first column of the matches
+const add_player_to_tournament_tree = async(tournament_data, player_id) => {
+    let data = tournament_data.current_state;
+    let found_space = false;
+
+    for (let i = 0; i < data.rounds[0].matches.length; i++) {
+        const match = data.rounds[0].matches[i];
+
+        for (let j = 0; j < match.players.length; j++) {
+            if (match.players[j] === "Player ???") {
+                match.players[j] = `Player ${player_id}`;
+                found_space = true;
+                break;
+            };
+        };
+    };
+
+    if (found_space) {
+        await database.pool.query(`update tournaments set current_state = ? where id = ?`, [JSON.stringify(data), tournament_data.id]);
+        return true;
+    };
+
+    // If no free spot is found
+    return false;
+};
 
 // player reacts to comment under a level
 const player_reacts_to_comment_under_a_level = async(operation_type, bool_type, level_id, player_id, comment_id, reaction_type) => {
@@ -2333,8 +2386,13 @@ const create_hash_id = (text) => {
 
 // get all players data by its db id
 const getDataById = async(id) => {
-    let [row] = await database.pool.query(`select * from players where player_id = ?`, [id]);
-    return row[0];
+    try {
+        let [row] = await database.pool.query(`select * from players where player_id = ?`, [id]);
+        return row[0];
+
+    } catch (error) {
+        return false;
+    };
 };
 
 // compare players_level_data of a level
