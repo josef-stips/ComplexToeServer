@@ -1934,15 +1934,23 @@ io.on('connection', socket => {
             // console.log(res[0][0]);
         });
     });
+
+    socket.on('tournament_player_to_next_round', async(rounds_dataset, winner, next_round, cb) => {
+        console.log(rounds_dataset);
+
+        // !problem! this function searches for the next free space
+        // but here you should paste the player on a specific space
+        let update_success = add_player_to_tournament_tree(rounds_dataset, winner, next_round);
+    });
 });
 
 // On player joins tournament: Add player to the next free space in the first column of the matches
-const add_player_to_tournament_tree = async(tournament_data, player_id) => {
+const add_player_to_tournament_tree = async(tournament_data, player_id, idx = 0) => {
     let data = tournament_data.current_state;
     let found_space = false;
 
-    for (let i = 0; i < data.rounds[0].matches.length; i++) {
-        const match = data.rounds[0].matches[i];
+    for (let i = 0; i < data.rounds[idx].matches.length; i++) {
+        const match = data.rounds[idx].matches[i];
 
         for (let j = 0; j < match.players.length; j++) {
             if (match.players[j] === "Player ???" && !found_space) {
