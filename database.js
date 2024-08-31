@@ -90,24 +90,24 @@ async function PlayerUpdatesData(player_id, newName, newIcon, playerInfoClass, p
 async function CreateRoom(id, xyCellAmount, InnerGameMode, playerTimer, fieldoptions, globalGameTimer, isPlaying, fieldIndex, fieldTitle,
     thirdPlayer, pointsToWin, win_patterns, playerAmount, player1_name, player2_name, player3_name, player1_icon, player2_icon, player1_role, player2_role, player3_role,
     player1_socketID, player2_socketID, player3_socketID, player1_advancedIcon, player2_advancedIcon, player1_IconColor, player2_IconColor, player1_timer, player2_timer, currentPlayer,
-    costumCoords, costumPatterns, costumIcon, killAllDrawnCells, player1_id, p1_XP, curr_music_name, level_id, is_random_player_lobby, x_and_y) {
+    costumCoords, costumPatterns, costumIcon, killAllDrawnCells, player1_id, p1_XP, curr_music_name, level_id, is_random_player_lobby, x_and_y, tournament_hash) {
 
     try {
         pool.query(`insert into roomdata (RoomID, xyCellAmount, InnerGameMode, PlayerTimer, fieldoptions,globalGameTimer ,isPlaying ,fieldIndex ,fieldTitle,
                 thirdPlayer,pointsToWin,win_patterns,players,player1_name,player2_name,player3_name,player1_icon,player2_icon,player1_role ,player2_role ,player3_role ,player1_socketID ,
                 player2_socketID ,player3_socketID ,player1_advancedIcon ,player2_advancedIcon ,player1_IconColor ,player2_IconColor ,player1_timer,player2_timer,currentPlayer, costumField, 
-                costumPatterns, costumIcon, killAllDrawnCells, player1_id, p1_XP, curr_music_name, level_id, is_random_player_lobby, x_and_y) 
+                costumPatterns, costumIcon, killAllDrawnCells, player1_id, p1_XP, curr_music_name, level_id, is_random_player_lobby, x_and_y, tournament_hash) 
         
-                values (?, ?, ?, ?, ?, ?, ?, ?,?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? , ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?)`,
+                values (?, ?, ?, ?, ?, ?, ?, ?,?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? , ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 
             [id, xyCellAmount, InnerGameMode, playerTimer, fieldoptions, globalGameTimer, isPlaying, fieldIndex, fieldTitle,
                 thirdPlayer, pointsToWin, win_patterns, playerAmount, player1_name, player2_name, player3_name, player1_icon, player2_icon, player1_role, player2_role, player3_role,
                 player1_socketID, player2_socketID, player3_socketID, player1_advancedIcon, player2_advancedIcon, player1_IconColor, player2_IconColor, player1_timer, player2_timer, currentPlayer,
-                JSON.stringify(costumCoords), JSON.stringify(costumPatterns), costumIcon, killAllDrawnCells, player1_id, p1_XP, curr_music_name, level_id, is_random_player_lobby, JSON.stringify(x_and_y)
+                JSON.stringify(costumCoords), JSON.stringify(costumPatterns), costumIcon, killAllDrawnCells, player1_id, p1_XP, curr_music_name, level_id, is_random_player_lobby, JSON.stringify(x_and_y),
+                tournament_hash
             ]
         );
     } catch (error) {
-
         console.error(error);
     };
 };
@@ -505,11 +505,38 @@ async function CreateClanTournament(data, clan_id, player_id) {
         const formattedStartDate = moment(data.startDate).format('YYYY-MM-DD HH:mm:ss');
         const formattedEndDate = moment(data.endDate).format('YYYY-MM-DD HH:mm:ss');
 
+        // ex.: new Date("2024-08-28T22:00:00.000Z"); new Date("2024-09-07T22:00:00.000Z")
+        // calculate tournament duration and divide it with rounds 
+        // const round_duration = (data.startDate - data.endDate) / (data.current_state.rounds + -1);
+        const startDate = new Date(data.startDate);
+        const endDate = new Date(data.endDate);
+        const rounds = data.tree_structure.rounds.length + (-1);
+
+        // Berechnung der Gesamtdauer des Turniers in Tagen
+        const tournamentDuration = (endDate - startDate) / (1000 * 60 * 60 * 24);
+
+        // Berechnung der Dauer jeder Runde in Tagen
+        const roundDuration = tournamentDuration / rounds;
+
+        // Objekt zum Speichern der Rundendaten
+        const roundSchedule = {};
+
+        // Berechnung der Start- und Enddaten jeder Runde und Speichern im Objekt
+        for (let i = 0; i < rounds; i++) {
+            let roundStartDate = new Date(startDate.getTime() + i * roundDuration * 24 * 60 * 60 * 1000);
+            let roundEndDate = new Date(roundStartDate.getTime() + roundDuration * 24 * 60 * 60 * 1000);
+
+            roundSchedule[`round_${i + 1}`] = {
+                startDate: roundStartDate.toISOString().split('T')[0],
+                endDate: roundEndDate.toISOString().split('T')[0]
+            };
+        };
+
         const q = `INSERT INTO tournaments (
             name, initiator, allowed_amount, participant_amount, participants, 
             start_date, finish_date, gems_to_put_in_pot, pot_value, allowed_patterns,
-            current_state, player_clock, field_size, points_to_win, clan_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+            current_state, player_clock, field_size, points_to_win, clan_id, round_schedule
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
         pool.query(q, [
             data.name,
@@ -526,12 +553,13 @@ async function CreateClanTournament(data, clan_id, player_id) {
             data.playerClock,
             data.fieldSize,
             data.pointsToGet,
-            clan_id
+            clan_id,
+            JSON.stringify(roundSchedule)
 
         ]).then(([rows]) => {
             console.log(rows);
         }).catch(err => {
-            console.error(err);
+            console.log(err);
         });
 
         return { success: true };

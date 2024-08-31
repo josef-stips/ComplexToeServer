@@ -259,7 +259,7 @@ io.on('connection', socket => {
             // create room in database with given data
             await database.CreateRoom(parseInt(roomID), parseInt(GameData[2]), GameData[1], parseInt(GameData[0]), JSON.stringify([]), 0, false, parseInt(GameData[5]), GameData[6],
                 GameData[9], GameData[10], JSON.stringify(GameData[11]), 1, GameData[3], "", "", GameData[4], "", "admin", "user", "blocker",
-                socket.id, "", "", GameData[7], "", GameData[8], "", parseInt(GameData[0]), parseInt(GameData[0]), 1, GameData[12], GameData[13], GameData[14], GameData[15], GameData[16], GameData[17], GameData[18], GameData[19], GameData[20], GameData[21]);
+                socket.id, "", "", GameData[7], "", GameData[8], "", parseInt(GameData[0]), parseInt(GameData[0]), 1, GameData[12], GameData[13], GameData[14], GameData[15], GameData[16], GameData[17], GameData[18], GameData[19], GameData[20], GameData[21], GameData[22]);
 
             // Inform and update the page of all other people who are clients of the room about the name of the admin
             io.to(roomID).emit('Admin_Created_And_Joined', [GameData[3], GameData[4], GameData[7], GameData[9]]); // PlayerData[9] = third player as boolean
@@ -1926,6 +1926,14 @@ io.on('connection', socket => {
             cb(false, 'Something went wrong. Try again later.');
         };
     });
+
+    socket.on('tournament_match_lobby_exists', async(hash, cb) => {
+        console.log(hash);
+        database.pool.query(`select * from roomdata where tournament_hash = ?`, [hash]).then(res => {
+            cb(res[0][0]);
+            // console.log(res[0][0]);
+        });
+    });
 });
 
 // On player joins tournament: Add player to the next free space in the first column of the matches
@@ -1937,7 +1945,7 @@ const add_player_to_tournament_tree = async(tournament_data, player_id) => {
         const match = data.rounds[0].matches[i];
 
         for (let j = 0; j < match.players.length; j++) {
-            if (match.players[j] === "Player ???") {
+            if (match.players[j] === "Player ???" && !found_space) {
                 match.players[j] = `Player ${player_id}`;
                 found_space = true;
                 break;
@@ -1981,8 +1989,7 @@ const player_reacts_to_comment_under_a_level = async(operation_type, bool_type, 
     } else {
 
         let [result] = await database.pool.query(`select comment_reactions from players_level_data where player_id = ? and level_id = ?`, [player_id, level_id]);
-
-        console.log(result);
+        // console.log(result);
         result[0].comment_reactions[comment_id] = bool_type;
 
         await database.pool.query(`update players_level_data set comment_reactions = ? where level_id = ? and player_id = ?`, [JSON.stringify(result[0].comment_reactions), level_id, player_id]);
@@ -1992,8 +1999,7 @@ const player_reacts_to_comment_under_a_level = async(operation_type, bool_type, 
 // if player has no personal data saved to this online level, create row.
 const has_player_personal_level_data = async(player_id, level_id) => {
     let [result] = await database.pool.query(`select * from players_level_data where player_id = ? and level_id = ?`, [player_id, level_id]);
-
-    console.log(result);
+    // console.log(result);
 
     return result;
 };
@@ -2225,8 +2231,7 @@ const removePlayerOfClan = async(player_id, clan_id, kick_action) => { // kick_a
         // update
         await database.pool.query(`update clans set previous_members = ? where
                 id = ?`, [JSON.stringify(previous_members), clan_id]);
-
-        console.log(kick_action, "rdsggsgfegf");
+        // console.log(kick_action, "rdsggsgfegf");
 
         // player got not kicked
         if (!kick_action) {
