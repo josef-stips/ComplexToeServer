@@ -72,6 +72,9 @@ class const_data {
 
 const constData = new const_data();
 
+// socket ids with player ids
+let socketIdById = {};
+
 // Websocket 
 io.on('connection', socket => {
     console.log('a user connected to the server ' + socket.id);
@@ -82,10 +85,13 @@ io.on('connection', socket => {
 
     // Player already was in the game
     socket.on("PlayerAlreadyExists", async(PlayerID, treasureIsAvailible, cb) => {
+        try {
+            let [row] = await database.pool.query(`select banned from players where player_id = ?`, [parseInt(PlayerID)]);
+            if (row[0].banned) cb(row[0].banned);
 
-        let [row] = await database.pool.query(`select banned from players where player_id = ?`, [parseInt(PlayerID)]);
-
-        if (row[0].banned) cb(row[0].banned);
+        } catch (error) {
+            console.log(error);
+        };
 
         // If the player already exists, a countdown (interval) is playing in the background in the database already
         // Check if the countdown is done
@@ -97,7 +103,6 @@ io.on('connection', socket => {
                 io.to(socket.id).emit('availible-treasure');
 
             } else {
-
                 // Treasure is not open, interval is not over
                 // send timestamp to client so it knows when the treasure is open
                 let datetime = await database.getTreasure_TimeStamp(parseInt(PlayerID));
@@ -112,6 +117,8 @@ io.on('connection', socket => {
             return;
         };
 
+        socketIdById[parseInt(PlayerID)] = socket.id;
+
         // update "last connection time" in database
         await database.Player_UpdateConnection(parseInt(PlayerID));
     });
@@ -121,6 +128,7 @@ io.on('connection', socket => {
         // create player by add a new row to the connection time: player id is auto_increment
         // return auto generated player id
         let [{ player_id: playerID }] = await database.createPlayer();
+        socketIdById[parseInt(playerID)] = socket.id;
 
         // send id to player, player saves it his storage
         io.to(socket.id).emit("RandomPlayerID_generated", playerID);
@@ -261,9 +269,17 @@ io.on('connection', socket => {
                 GameData[9], GameData[10], JSON.stringify(GameData[11]), 1, GameData[3], "", "", GameData[4], "", "admin", "user", "blocker",
                 socket.id, "", "", GameData[7], "", GameData[8], "", parseInt(GameData[0]), parseInt(GameData[0]), 1, GameData[12], GameData[13], GameData[14], GameData[15], GameData[16], GameData[17], GameData[18], GameData[19], GameData[20], GameData[21], GameData[22]);
 
+            // send msg to opponent ! only in tournament mode !
+            console.log(GameData[22], GameData[23], GameData[23].toString(), socketIdById, socketIdById[GameData[23]])
+
+            if (GameData[22]) {
+                let tournament_player_msg = { msg: true, msg_type: "tournament_opponent_created_lobby", player: GameData[3], player_id: GameData[16], room_id: roomID };
+                await database.pool.query(`update players set clan_msgs = ? where player_id = ?`, [JSON.stringify(tournament_player_msg), GameData[23]]);
+                io.to(socketIdById[GameData[23]]).emit('tournament_opponent_created_lobby', tournament_player_msg);
+            };
+
             // Inform and update the page of all other people who are clients of the room about the name of the admin
             io.to(roomID).emit('Admin_Created_And_Joined', [GameData[3], GameData[4], GameData[7], GameData[9]]); // PlayerData[9] = third player as boolean
-
             return;
 
         } else {
@@ -470,7 +486,7 @@ io.on('connection', socket => {
     });
 
     // user leaves lobby. if admin leaves lobby => room gets killes and all users in there gets kicked out
-    socket.on('user_left_lobby', async(user, roomID, from_continue_btn, callback) => {
+    socket.on('user_left_lobby', async(user, roomID, from_continue_btn, tournament_opponent_id, callback) => {
         try {
             await database.pool.query(`update roomdata set win_combinations = JSON_ARRAY(),p1_points = 0, p2_points = 0 where RoomID = ?`, [parseInt(roomID)]);
 
@@ -501,6 +517,12 @@ io.on('connection', socket => {
 
                 // if they are still in the lobby and the admin leaves
                 if (isPlaying == 0) {
+                    // case: tournament
+                    if (tournament_opponent_id) {
+                        io.to(socketIdById[tournament_opponent_id]).emit('universal_clan_msg_abort_lobby');
+                        await database.pool.query(`update players set clan_msgs = ? where player_id = ?`, [JSON.stringify([]), tournament_opponent_id]);
+                    };
+
                     // send a function to the other person of the room so their html updates properly
                     io.to(roomID).emit('killed_room');
 
@@ -1721,13 +1743,17 @@ io.on('connection', socket => {
 
     // on client load client requests ingoing clan messages in his personal db row or important clan messages in clans table
     socket.on("check_for_ingoing_clan_msgs", async(player_id, clan_id, cb) => {
+        let personal_clan_msg;
 
-        let [player_rows] = await database.pool.query(`select clan_msgs from players where player_id = ?`, [player_id]);
-        let personal_clan_msg = player_rows[0].clan_msgs;
+        try {
+            let [player_rows] = await database.pool.query(`select clan_msgs from players where player_id = ?`, [player_id]);
+            personal_clan_msg = player_rows[0].clan_msgs;
 
-        if (typeof clan_id == Number) {
-
-            console.log(clan_id);
+            if (typeof clan_id == Number) {
+                console.log(clan_id);
+            };
+        } catch (error) {
+            console.log(error);
         };
 
         cb(personal_clan_msg);
@@ -2261,7 +2287,6 @@ const removePlayerOfClan = async(player_id, clan_id, kick_action) => { // kick_a
 
             // update clan message of player
             let clan_player_msg = { msg: true, msg_type: "kick", kick_reason: kick_action.kick_reason, kicker_id: kick_action.kicker_id, kicker_name: kick_action.name };
-
             await database.pool.query(`update players set clan_msgs = ?, clan_data = ? where player_id = ?`, [JSON.stringify(clan_player_msg), null, player_id]);
         };
     };
