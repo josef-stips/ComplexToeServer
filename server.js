@@ -1961,14 +1961,50 @@ io.on('connection', socket => {
         });
     });
 
-    socket.on('tournament_player_to_next_round', async(rounds_dataset, winner, next_round, cb) => {
-        console.log(rounds_dataset);
-
-        // !problem! this function searches for the next free space
-        // but here you should paste the player on a specific space
-        let update_success = add_player_to_tournament_tree(rounds_dataset, winner, next_round);
+    socket.on('tournament_player_to_next_round', async(rounds_dataset, winner, curr_round, match_idx, cb) => {
+        let update_success = await tournament_player_to_next_round(rounds_dataset, winner, curr_round, curr_round + 1, match_idx);
+        cb(update_success);
     });
 });
+
+const tournament_player_to_next_round = async(rounds_dataset, winner, curr_round, next_round, match_idx) => {
+    console.log('Dataset:', rounds_dataset, 'Winner:', winner, 'Current Round:', curr_round, 'Next Round:', next_round, 'Match Index:', match_idx);
+
+    const currentRound = rounds_dataset.rounds.find(round => round.round === curr_round);
+    if (!currentRound) {
+        console.error(`Runde ${curr_round} nicht gefunden.`);
+        return false;
+    };
+
+    const currentMatch = currentRound.matches[match_idx];
+    if (!currentMatch) {
+        console.error(`Match ${match_idx} in Runde ${curr_round} nicht gefunden.`);
+        return false;
+    };
+
+    const nextRound = rounds_dataset.rounds.find(round => round.round === next_round);
+    if (!nextRound) {
+        console.error(`Nächste Runde ${next_round} nicht gefunden.`);
+        return false;
+    };
+
+    const nextMatch = nextRound.matches[match_idx];
+    if (!nextMatch) {
+        console.error(`Match ${match_idx} in Runde ${next_round} nicht gefunden.`);
+        return false;
+    };
+
+    const winnerIndex = currentMatch.players.indexOf(winner);
+    if (winnerIndex === -1) {
+        console.error(`Gewinner ${winner} nicht in Runde ${curr_round}, Match ${match_idx} gefunden.`);
+        return false;
+    };
+
+    nextMatch.players[winnerIndex] = winner;
+    console.log('Updated Dataset:', rounds_dataset);
+
+    return rounds_dataset;
+};
 
 // On player joins tournament: Add player to the next free space in the first column of the matches
 const add_player_to_tournament_tree = async(tournament_data, player_id, idx = 0) => {
