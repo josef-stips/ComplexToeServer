@@ -1954,56 +1954,35 @@ io.on('connection', socket => {
     });
 
     socket.on('tournament_match_lobby_exists', async(hash, cb) => {
-        console.log(hash);
-        database.pool.query(`select * from roomdata where tournament_hash = ?`, [hash]).then(res => {
-            cb(res[0][0]);
-            // console.log(res[0][0]);
-        });
+        database.pool.query(`select * from roomdata where tournament_hash = ?`, [hash]).then(res => cb(res[0][0]));
     });
 
-    socket.on('tournament_player_to_next_round', async(rounds_dataset, winner, curr_round, match_idx, cb) => {
-        let update_success = await tournament_player_to_next_round(rounds_dataset, winner, curr_round, curr_round + 1, match_idx);
+    socket.on('tournament_player_to_next_round', async(rounds_dataset, winner, curr_round, match_idx, tour_id, cb) => {
+        let update_success = await tournament_player_to_next_round(rounds_dataset, winner, curr_round - 1, curr_round, match_idx, tour_id);
         cb(update_success);
     });
 });
+const tournament_player_to_next_round = async(rounds_dataset, winner, curr_round, next_round, match_idx, tour_id) => {
+    // determines the position of the player in the next match. Wether he should land on player 1 or player 2 position in array.
+    const winnerIndex = match_idx % 2;
 
-const tournament_player_to_next_round = async(rounds_dataset, winner, curr_round, next_round, match_idx) => {
-    console.log('Dataset:', rounds_dataset, 'Winner:', winner, 'Current Round:', curr_round, 'Next Round:', next_round, 'Match Index:', match_idx);
+    console.log('Dataset:', rounds_dataset, 'Winner:', winner, 'Current Round:', curr_round, 'Next Round:', next_round, 'Match Index:', match_idx, tour_id, "winnerIndex: ", winnerIndex);
 
-    const currentRound = rounds_dataset.rounds.find(round => round.round === curr_round);
-    if (!currentRound) {
-        console.error(`Runde ${curr_round} nicht gefunden.`);
+    // Instead of fetching the whole dataset and modifying it, directly update the specific field in the DB 
+    try {
+        // Update winner in the current round and match 
+        await database.pool.query(`UPDATE tournaments SET current_state = JSON_SET(current_state, '$.rounds[?].matches[?].winner', ?) WHERE id = ?`, [curr_round, match_idx, winner, tour_id]);
+
+        // Optionally, update the next round's player data (if needed) 
+        await database.pool.query(`UPDATE tournaments SET current_state = JSON_SET(current_state, '$.rounds[?].matches[?].players[?]', ?) WHERE id = ?`, [next_round, match_idx, winnerIndex, winner, tour_id]);
+
+        console.log('Winner and next match updated successfully.');
+        return true;
+
+    } catch (error) {
+        console.error('Error updating the database:', error);
         return false;
     };
-
-    const currentMatch = currentRound.matches[match_idx];
-    if (!currentMatch) {
-        console.error(`Match ${match_idx} in Runde ${curr_round} nicht gefunden.`);
-        return false;
-    };
-
-    const nextRound = rounds_dataset.rounds.find(round => round.round === next_round);
-    if (!nextRound) {
-        console.error(`Nächste Runde ${next_round} nicht gefunden.`);
-        return false;
-    };
-
-    const nextMatch = nextRound.matches[match_idx];
-    if (!nextMatch) {
-        console.error(`Match ${match_idx} in Runde ${next_round} nicht gefunden.`);
-        return false;
-    };
-
-    const winnerIndex = currentMatch.players.indexOf(winner);
-    if (winnerIndex === -1) {
-        console.error(`Gewinner ${winner} nicht in Runde ${curr_round}, Match ${match_idx} gefunden.`);
-        return false;
-    };
-
-    nextMatch.players[winnerIndex] = winner;
-    console.log('Updated Dataset:', rounds_dataset);
-
-    return rounds_dataset;
 };
 
 // On player joins tournament: Add player to the next free space in the first column of the matches
