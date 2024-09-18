@@ -1961,15 +1961,21 @@ io.on('connection', socket => {
         });
     });
 
-    socket.on('tournament_player_to_next_round', async(rounds_dataset, winner, curr_round, match_idx, cb) => {
-        let update_success = await tournament_player_to_next_round(rounds_dataset, winner, curr_round, curr_round + 1, match_idx);
+    socket.on('tournament_player_to_next_round', async(rounds_dataset, winner, curr_round, match_idx,tour_id, cb) => {
+        let update_success = await tournament_player_to_next_round(rounds_dataset, winner, curr_round, curr_round + 1, match_idx, tour_id);
         cb(update_success);
     });
 });
 
-const tournament_player_to_next_round = async(rounds_dataset, winner, curr_round, next_round, match_idx) => {
-    console.log('Dataset:', rounds_dataset, 'Winner:', winner, 'Current Round:', curr_round, 'Next Round:', next_round, 'Match Index:', match_idx);
-
+const tournament_player_to_next_round = async(rounds_dataset, winner, curr_round, next_round, match_idx, tour_id) => {
+    console.log('Dataset:', rounds_dataset, 'Winner:', winner, 'Current Round:', curr_round, 'Next Round:', next_round, 'Match Index:', match_idx, tour_id);
+    
+    // get from db
+    let [state_data] = await database.pool.query(`select curr_state from tournaments where id = ?`, [tour_id]);
+    
+    state_data[0][curr_round][match_idx].winner = winner;
+	rounds_dataset = state_data;
+    
     const currentRound = rounds_dataset.rounds.find(round => round.round === curr_round);
     if (!currentRound) {
         console.error(`Runde ${curr_round} nicht gefunden.`);
@@ -2002,6 +2008,11 @@ const tournament_player_to_next_round = async(rounds_dataset, winner, curr_round
 
     nextMatch.players[winnerIndex] = winner;
     console.log('Updated Dataset:', rounds_dataset);
+    
+    // save in db
+	await database.pool.query(`update curr_state from tournaments where id = ?` , [JSON.stringify(state_data) , tour_id]);
+
+	// another approach: maybe update only the single data in the array right in the db. Hope its possible
 
     return rounds_dataset;
 };
