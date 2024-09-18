@@ -1983,6 +1983,17 @@ const tournament_player_to_next_round = async(rounds_dataset, winner, curr_round
         console.error('Error updating the database:', error);
         return false;
     };
+
+    const winnerIndex = currentMatch.players.indexOf(winner);
+    if (winnerIndex === -1) {
+        console.error(`Gewinner ${winner} nicht in Runde ${curr_round}, Match ${match_idx} gefunden.`);
+        return false;
+    };
+
+    nextMatch.players[winnerIndex] = winner;
+    console.log('Updated Dataset:', rounds_dataset);
+
+    return rounds_dataset;
 };
 
 // On player joins tournament: Add player to the next free space in the first column of the matches
