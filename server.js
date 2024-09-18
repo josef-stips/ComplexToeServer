@@ -1965,9 +1965,7 @@ io.on('connection', socket => {
 const tournament_player_to_next_round = async(rounds_dataset, winner, curr_round, next_round, match_idx, tour_id) => {
     // determines the position of the player in the next match. Wether he should land on player 1 or player 2 position in array.
     const winnerIndex = match_idx % 2;
-
-    console.log('Dataset:', rounds_dataset, 'Winner:', winner, 'Current Round:', curr_round, 'Next Round:', next_round, 'Match Index:', match_idx, tour_id, "winnerIndex: ", winnerIndex);
-
+    // console.log('Dataset:', rounds_dataset, 'Winner:', winner, 'Current Round:', curr_round, 'Next Round:', next_round, 'Match Index:', match_idx, tour_id, "winnerIndex: ", winnerIndex);
     // Instead of fetching the whole dataset and modifying it, directly update the specific field in the DB 
     try {
         // Update winner in the current round and match 
@@ -1983,18 +1981,8 @@ const tournament_player_to_next_round = async(rounds_dataset, winner, curr_round
         console.error('Error updating the database:', error);
         return false;
     };
-
-    const winnerIndex = currentMatch.players.indexOf(winner);
-    if (winnerIndex === -1) {
-        console.error(`Gewinner ${winner} nicht in Runde ${curr_round}, Match ${match_idx} gefunden.`);
-        return false;
-    };
-
-    nextMatch.players[winnerIndex] = winner;
-    console.log('Updated Dataset:', rounds_dataset);
-
-    return rounds_dataset;
 };
+
 
 // On player joins tournament: Add player to the next free space in the first column of the matches
 const add_player_to_tournament_tree = async(tournament_data, player_id, idx = 0) => {
