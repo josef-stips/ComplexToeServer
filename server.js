@@ -1962,9 +1962,11 @@ io.on('connection', socket => {
         cb(update_success);
     });
 });
+
 const tournament_player_to_next_round = async(rounds_dataset, winner, curr_round, next_round, match_idx, tour_id) => {
     // determines the position of the player in the next match. Wether he should land on player 1 or player 2 position in array.
     const winnerIndex = match_idx % 2;
+
     // console.log('Dataset:', rounds_dataset, 'Winner:', winner, 'Current Round:', curr_round, 'Next Round:', next_round, 'Match Index:', match_idx, tour_id, "winnerIndex: ", winnerIndex);
     // Instead of fetching the whole dataset and modifying it, directly update the specific field in the DB 
     try {
