@@ -2744,7 +2744,13 @@ async function request_game_to_start(Data) {
                     };
 
                     // ---------------- all players recieve player timer directly from database ----------------
-                    io.to(parseInt(Data[0])).emit('playerTimer', player1Timer, player2Timer, currentPlayer, results[0][0].watching_count);
+                    let watch_count;
+
+                    if (results[0][0]) {
+                        watch_count = results[0][0].watching_count;
+                    };
+
+                    io.to(parseInt(Data[0])).emit('playerTimer', player1Timer, player2Timer, currentPlayer, watch_count);
 
                     // console.log(player1Timer, player2Timer, currentPlayer, eyeAttackInterval, eyeAttackInterval_bool);
 
