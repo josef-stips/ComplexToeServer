@@ -458,8 +458,9 @@ const new_gamLog_entry = async(gameData) => {
             p3_id,
             field_index,
             music_name,
-            boneyard_arr
-        ) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
+            boneyard_arr,
+            tournament_data
+        ) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [
             gameData[0],
             gameData[1],
             gameData[2],
@@ -493,7 +494,8 @@ const new_gamLog_entry = async(gameData) => {
             gameData[30],
             gameData[31],
             gameData[32],
-            gameData[33]
+            gameData[33],
+            JSON.stringify(gameData[34])
         ]
     );
 
