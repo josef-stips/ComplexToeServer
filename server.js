@@ -1961,6 +1961,29 @@ io.on('connection', socket => {
         let update_success = await tournament_player_to_next_round(rounds_dataset, winner, curr_round - 1, curr_round, match_idx, tour_id);
         cb(update_success);
     });
+
+    socket.on('get_gameLog_by_tournament_data', async(tournament_match_data, cb) => {
+        try {
+            const query = `
+                SELECT * FROM gamelogs 
+                WHERE JSON_UNQUOTE(JSON_EXTRACT(tournament_data, '$.clan_id')) = ?
+                AND JSON_UNQUOTE(JSON_EXTRACT(tournament_data, '$.player1')) = ?
+                AND JSON_UNQUOTE(JSON_EXTRACT(tournament_data, '$.player2')) = ?
+                AND JSON_UNQUOTE(JSON_EXTRACT(tournament_data, '$.tournament_id')) = ?`;
+
+            const { clan_id, player1, player2, tournament_id } = tournament_match_data;
+            const [rows] = await database.pool.query(query, [clan_id, player1, player2, tournament_id]);
+
+            if (rows.length > 0) {
+                cb(rows[0]);
+            } else {
+                cb(null);
+            };
+        } catch (error) {
+            console.error("Fehler bei der Abfrage 'get_gameLog_by_tournament_data':", error);
+            cb(false);
+        };
+    });
 });
 
 const tournament_player_to_next_round = async(rounds_dataset, winner, curr_round, next_round, match_idx, tour_id) => {
