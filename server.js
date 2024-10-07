@@ -1986,7 +1986,7 @@ io.on('connection', socket => {
     });
 });
 
-const tournament_player_to_next_round = async(rounds_dataset, winner, curr_round, next_round, match_idx, tour_id) => {
+const tournament_player_to_next_round = async(rounds_dataset, winner, winner_id, curr_round, next_round, match_idx, tour_id, clan_id) => {
     // determines the position of the player in the next match. Wether he should land on player 1 or player 2 position in array.
     const winnerIndex = match_idx % 2;
 
@@ -2000,6 +2000,13 @@ const tournament_player_to_next_round = async(rounds_dataset, winner, curr_round
         await database.pool.query(`UPDATE tournaments SET current_state = JSON_SET(current_state, '$.rounds[?].matches[?].players[?]', ?) WHERE id = ?`, [next_round, match_idx, winnerIndex, winner, tour_id]);
 
         console.log('Winner and next match updated successfully.');
+
+        // check wether the next round is the last round. If so the player won the entire tournament
+        if (rounds_dataset[next_round].final) {
+            player_won_tournament(tour_id, clan_id);
+            console.log("player won the tournament:", tour_id);
+        };
+
         return true;
 
     } catch (error) {
@@ -2008,6 +2015,32 @@ const tournament_player_to_next_round = async(rounds_dataset, winner, curr_round
     };
 };
 
+// player got to the next final round where he cannot play against another player which means he won the entire tournament and gets the pot
+// 1. clan msg for the entire clan that player x won
+// 2. player gets pot and gets notified (use universal pop up for that)
+const player_won_tournament = async(tour_id, clan_id, winner_id) => {
+    console.log("df", tour_id, clan_id, winner_id);
+
+    // get data from database
+    let [rows] = await database.pool.query(`select room_id from clans where id = ?`, [clan_id]);
+    let roomID = rows[0].room_id;
+
+    let [player_rows] = await database.pool.query(`select player_name from players where player_id = ?`, [winner_id]);
+    let winner_name = player_rows[0].player_name;
+
+    let [tour_rows] = await database.pool.query(`select * from tournaments where id = ?`, [tour_id]);
+    let tournament_name = tour_rows[0].name;
+    let pot_value = tour_rows[0].pot_value;
+
+    // clan chat message
+    io.to(roomID).emit("player_won_tournament", winner_name, tournament_name);
+    passClanMsg(`${winner_name} won the clan tournament ${tournament_name}!`, null, clan_id, "clan_msg");
+
+    // player message
+    let clan_player_msg = { msg: true, msg_type: "tournament_won", pot_value };
+    await database.pool.query(`update players set clan_msgs = ? where player_id = ?`, [JSON.stringify(clan_player_msg), winner_id]);
+    io.to(socketIdById[winner_id]).emit('player_won_tournament', clan_player_msg);
+};
 
 // On player joins tournament: Add player to the next free space in the first column of the matches
 const add_player_to_tournament_tree = async(tournament_data, player_id, idx = 0) => {
