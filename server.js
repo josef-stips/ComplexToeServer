@@ -1957,8 +1957,8 @@ io.on('connection', socket => {
         database.pool.query(`select * from roomdata where tournament_hash = ?`, [hash]).then(res => cb(res[0][0]));
     });
 
-    socket.on('tournament_player_to_next_round', async(rounds_dataset, winner, curr_round, match_idx, tour_id, cb) => {
-        let update_success = await tournament_player_to_next_round(rounds_dataset, winner, curr_round - 1, curr_round, match_idx, tour_id);
+    socket.on('tournament_player_to_next_round', async(rounds_dataset, winner, winner_id, curr_round, match_idx, tour_id, clan_id, cb) => {
+        let update_success = await tournament_player_to_next_round(rounds_dataset, winner, winner_id, curr_round - 1, curr_round, match_idx, tour_id, clan_id);
         cb(update_success);
     });
 
@@ -1989,28 +1989,29 @@ io.on('connection', socket => {
 const tournament_player_to_next_round = async(rounds_dataset, winner, winner_id, curr_round, next_round, match_idx, tour_id, clan_id) => {
     // determines the position of the player in the next match. Wether he should land on player 1 or player 2 position in array.
     const winnerIndex = match_idx % 2;
+    const NextMatchIndex = Math.floor(Math.abs(match_idx / 2));
 
-    // console.log('Dataset:', rounds_dataset, 'Winner:', winner, 'Current Round:', curr_round, 'Next Round:', next_round, 'Match Index:', match_idx, tour_id, "winnerIndex: ", winnerIndex);
+    console.log('Dataset:', rounds_dataset, 'Winner:', winner, 'Current Round:', curr_round, 'Next Round:', next_round, 'Match Index:', match_idx, tour_id, "winnerIndex: ", winnerIndex);
     // Instead of fetching the whole dataset and modifying it, directly update the specific field in the DB 
     try {
         // Update winner in the current round and match 
         await database.pool.query(`UPDATE tournaments SET current_state = JSON_SET(current_state, '$.rounds[?].matches[?].winner', ?) WHERE id = ?`, [curr_round, match_idx, winner, tour_id]);
 
         // Optionally, update the next round's player data (if needed) 
-        await database.pool.query(`UPDATE tournaments SET current_state = JSON_SET(current_state, '$.rounds[?].matches[?].players[?]', ?) WHERE id = ?`, [next_round, match_idx, winnerIndex, winner, tour_id]);
+        await database.pool.query(`UPDATE tournaments SET current_state = JSON_SET(current_state, '$.rounds[?].matches[?].players[?]', ?) WHERE id = ?`, [next_round, NextMatchIndex, winnerIndex, winner, tour_id]);
 
         console.log('Winner and next match updated successfully.');
 
         // check wether the next round is the last round. If so the player won the entire tournament
-        if (rounds_dataset[next_round].final) {
-            player_won_tournament(tour_id, clan_id);
+        if (rounds_dataset.rounds[next_round].final) {
+            player_won_tournament(tour_id, clan_id, winner_id);
             console.log("player won the tournament:", tour_id);
         };
 
         return true;
 
     } catch (error) {
-        console.error('Error updating the database:', error);
+        console.error('Error updating the database:', error, "data:", rounds_dataset, winner, winner_id, curr_round, next_round, match_idx, tour_id, clan_id);
         return false;
     };
 };
@@ -2032,14 +2033,16 @@ const player_won_tournament = async(tour_id, clan_id, winner_id) => {
     let tournament_name = tour_rows[0].name;
     let pot_value = tour_rows[0].pot_value;
 
+    // update tournament winner row 
+    await database.pool.query(`update tournaments set winner_player_id = ? where id = ?`, [winner_id, tour_id]);
+
     // clan chat message
     io.to(roomID).emit("player_won_tournament", winner_name, tournament_name);
-    passClanMsg(`${winner_name} won the clan tournament ${tournament_name}!`, null, clan_id, "clan_msg");
+    await passClanMsg(`${winner_name} won the clan tournament ${tournament_name}!`, null, clan_id, "clan_msg");
 
     // player message
-    let clan_player_msg = { msg: true, msg_type: "tournament_won", pot_value };
+    let clan_player_msg = { msg: true, msg_type: "tournament_won", pot_value, tournament_name };
     await database.pool.query(`update players set clan_msgs = ? where player_id = ?`, [JSON.stringify(clan_player_msg), winner_id]);
-    io.to(socketIdById[winner_id]).emit('player_won_tournament', clan_player_msg);
 };
 
 // On player joins tournament: Add player to the next free space in the first column of the matches
