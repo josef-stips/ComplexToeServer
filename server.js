@@ -1984,6 +1984,27 @@ io.on('connection', socket => {
             cb(false);
         };
     });
+
+    socket.on('delete_tournament_due_to_participants', async(t_data, clan_id, cb) => {
+        try {
+            // delete tournament
+            await database.pool.query(`delete from tournaments where id = ?`, [t_data.id]);
+
+            // get clan data 
+            let [rows] = await database.pool.query(`select * from clans where id = ?`, [clan_id]);
+
+            // clan msg
+            io.to(rows[0].room_id).emit("delete_tournament_due_to_participants_clan_msg", winner_name, tournament_name);
+            await passClanMsg(`Due to a lack of participants the tournament ${t_data.name} had to be deleted.`, null, clan_id, "clan_msg");
+
+            // callback
+            cb({ success: true, t_data });
+
+        } catch (error) {
+            cb({ success: false, error, t_data });
+            console.log(error);
+        };
+    });
 });
 
 const tournament_player_to_next_round = async(rounds_dataset, winner, winner_id, curr_round, next_round, match_idx, tour_id, clan_id) => {
