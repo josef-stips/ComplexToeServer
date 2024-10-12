@@ -1459,7 +1459,7 @@ io.on('connection', socket => {
     socket.on("alter_personal_data_for_level_x", async(player_id, level_id, points_made, beat, like, cb) => {});
 
     socket.on("submit_comment_to_level", async(text, level_id, player_id, player_name, player_points, cb) => {
-        player_points = player_points.points_made;
+        player_points = player_points.points_made || 0;
 
         let query = `
             insert into level_comments (level_id, player_id, player_points, 
@@ -1921,8 +1921,12 @@ io.on('connection', socket => {
     });
 
     socket.on('load_tournaments', async(clan_data, cb) => {
-        let [rows] = await database.pool.query(`select * from tournaments where clan_id = ?`, [clan_data.clan_id]);
-        cb(rows);
+        try {
+            let [rows] = await database.pool.query(`select * from tournaments where clan_id = ?`, [clan_data.clan_id]);
+            cb(rows);
+        } catch (error) {
+            console.log(error);
+        };
     });
 
     // player wants to join his clan's clan tournament
