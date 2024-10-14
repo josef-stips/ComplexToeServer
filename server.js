@@ -292,67 +292,59 @@ io.on('connection', socket => {
     });
 
     // try to enter a room. If room exists, the player enters the room but still needs to confirm his user data
-    socket.on('TRY_enter_room', async(GameID, callback) => { // the id the user parsed into the input field
-        // check if room already exists
-        let result = await database.pool.query(`select * from roomdata where RoomID = ?`, [parseInt(GameID)]);
+    socket.on('TRY_enter_room', async(GameID, callback) => {
+        const roomId = parseInt(GameID); // Einmalige Konvertierung der GameID
 
-        // check if the room allows a third player
-        let result1 = await database.pool.query(`select thirdPlayer from roomdata where RoomID = ?`, [parseInt(GameID)]);
-        let thirdPlayer;
-        if (result1[0].length > 0) {
-            thirdPlayer = result1[0][0].thirdPlayer;
-        };
+        try {
+            // Abfrage: Existiert der Raum und enthält alle benötigten Daten
+            let query = `
+                SELECT thirdPlayer, xyCellAmount, PlayerTimer, InnerGameMode, player3_name, player2_name, costumField,players 
+                FROM roomdata 
+                WHERE RoomID = ?`;
+            let [result] = await database.pool.query(query, [roomId]);
 
-        // if room EXISTS
-        if (result[0].length >= 1) { // check if room exists
-
-            try {
-                // check if the room is full. (over 2 player => full)
-                if (io.sockets.adapter.rooms.get(parseInt(GameID)).size == 1 ||
-                    // or second condition: the room is full but they need a blocker so the player can join as a blocker
-                    io.sockets.adapter.rooms.get(parseInt(GameID)).size == 2 && thirdPlayer == 1) {
-                    // join room
-                    socket.join(parseInt(GameID));
-
-                    // Game Data for the client
-                    let result2 = await database.pool.query(`select xyCellAmount from roomdata where RoomID = ?`, [parseInt(GameID)]);
-                    let result3 = await database.pool.query(`select PlayerTimer from roomdata where RoomID = ?`, [parseInt(GameID)]);
-                    let result4 = await database.pool.query(`select InnerGameMode from roomdata where RoomID = ?`, [parseInt(GameID)]);
-                    let result5 = await database.pool.query(`select player3_name from roomdata where RoomID = ?`, [parseInt(GameID)]);
-                    let result6 = await database.pool.query(`select player2_name from roomdata where RoomID = ?`, [parseInt(GameID)]);
-                    let [result7] = await database.pool.query(`select costumField from roomdata where RoomID = ?`, [parseInt(GameID)]);
-
-                    let FieldSize = result2[0][0].xyCellAmount;
-                    let PlayerTimer = result3[0][0].PlayerTimer;
-                    let InnerGameMode = result4[0][0].InnerGameMode;
-                    let Player3Name = result5[0][0].player3_name;
-                    let Player2Name = result6[0][0].player2_name;
-                    let costumField = result7[0].costumField;
-
-                    // callback to client who wants to join:
-
-                    // if three player are in the lobby, there is a third player allowed and there is a second player
-                    if (io.sockets.adapter.rooms.get(parseInt(GameID)).size == 3 && thirdPlayer == 1 &&
-                        Player3Name == '' && Player2Name != '') {
-                        // send data to client who joined
-                        callback(['room exists', GameID, FieldSize, PlayerTimer, InnerGameMode, "thirdplayer", costumField]);
-
-                    } else { // if there are only 2 player in the lobby or a third player is not allowed or there is a third player but not a second player
-                        // send data to client who joined
-                        callback(['room exists', GameID, FieldSize, PlayerTimer, InnerGameMode, "secondplayer", costumField]);
-                    };
-
-                } else { // room is full
-                    callback([`You can't join`]);
-                };
-
-            } catch (error) {
-                callback(['no room found']);
-                console.log(error);
+            if (result.length === 0) {
+                // Raum existiert nicht
+                return callback(['no room found']);
             };
 
-        } else { // room does not exists, alert user
-            // callback to client who wants to join
+            // Extrahieren der Daten aus der Abfrage
+            const {
+                thirdPlayer,
+                xyCellAmount: FieldSize,
+                PlayerTimer,
+                InnerGameMode,
+                player3_name: Player3Name,
+                player2_name: Player2Name,
+                costumField,
+                players: playerAmount
+            } = result[0];
+
+            // Prüfen, ob der Raum existiert
+            const room = io.sockets.adapter.rooms.get(roomId);
+            const roomSize = room ? room.size : 0;
+
+            if (roomSize === 1 || (roomSize === 2 && thirdPlayer == 1)) {
+                // Spieler tritt dem Raum bei
+                socket.join(roomId);
+
+                // Unterscheidung, ob 2 oder 3 Spieler im Raum sind und Bedingungen erfüllt sind
+                if (roomSize == 2 && thirdPlayer == 1 && playerAmount == 2) {
+                    await database.pool.query(`update roomdata set players = players + 1 where RoomID = ?`, [roomId]);
+                    callback(['room exists', roomId, FieldSize, PlayerTimer, InnerGameMode, "thirdplayer", costumField]);
+
+                } else if (playerAmount == 1) {
+                    await database.pool.query(`update roomdata set players = players + 1 where RoomID = ?`, [roomId]);
+                    callback(['room exists', roomId, FieldSize, PlayerTimer, InnerGameMode, "secondplayer", costumField]);
+                };
+
+            } else {
+                // Raum ist voll
+                callback([`You can't join`]);
+            };
+
+        } catch (error) {
+            console.error(`Error trying to enter room ${roomId}:`, error);
             callback(['no room found']);
         };
     });
@@ -367,7 +359,7 @@ io.on('connection', socket => {
         const query = `
             SELECT 
                 player1_name, player1_icon, player1_advancedIcon, player1_IconColor, 
-                thirdPlayer, player3_name, player2_name, player1_id, is_random_player_lobby, x_and_y
+                thirdPlayer, player3_name, player2_name, player1_id, is_random_player_lobby, x_and_y, players
             FROM roomdata 
             WHERE RoomID = ?`;
 
@@ -384,10 +376,11 @@ io.on('connection', socket => {
             player2_name: player2Name,
             player1_id: player1Id,
             is_random_player_lobby: isRndPlayerLobby,
-            x_and_y: xy
+            x_and_y: xy,
+            players: playerAmount
         } = roomData;
 
-        const [username, icon, advancedIcon, iconColor, role] = data.slice(1);
+        let [username, icon, advancedIcon, iconColor, role] = data.slice(1);
 
         // Check if the user's name conflicts with existing player names
         if ((player2Name === "" && (username === player1Name || username === thirdPlayerName)) ||
@@ -410,13 +403,15 @@ io.on('connection', socket => {
 
             // Notify other players in the room
             io.to(roomId).emit('SecondPlayer_Joined', [username, icon, advancedIcon, iconColor, thirdPlayerBool, thirdPlayerName, player1Name]);
+            role = "user";
 
-        } else if (role === "blocker") {
+        } else if (role === 'blocker') {
             // Save blocker data in the database
             await database.BlockerJoinsRoom(roomId, username, socket.id, data[6]);
 
             // Notify other players in the room
             io.to(roomId).emit('ThirdPlayer_Joined', [username, icon, advancedIcon, iconColor, thirdPlayerBool]);
+            role = "blocker";
         };
 
         if (isRndPlayerLobby) {
@@ -427,30 +422,46 @@ io.on('connection', socket => {
             }, 1000);
         };
 
-        callback([username, player1Name, player1Icon, icon, advancedIcon, player1AdvancedIcon, player1IconColor]);
+        callback([username, player1Name, player1Icon, icon, advancedIcon, player1AdvancedIcon, player1IconColor, role, thirdPlayerBool]);
     });
 
     // the third player (blocker) joins the lobby and requests the data for the second player so he can see it
-    socket.on('thirdplayer_requests_SecondPlayerData', async(data) => { // data[0] = game id
-        // request data from database
-        let result = await database.pool.query(`select player2_name from roomdata where RoomID = ?`, [parseInt(data[0])]);
-        let result1 = await database.pool.query(`select player2_icon from roomdata where RoomID = ?`, [parseInt(data[0])]);
-        let result2 = await database.pool.query(`select player2_advancedIcon from roomdata where RoomID = ?`, [parseInt(data[0])]);
-        let result3 = await database.pool.query(`select player2_IconColor from roomdata where RoomID = ?`, [parseInt(data[0])]);
+    socket.on('thirdplayer_requests_SecondPlayerData', async(data) => {
+        const roomId = parseInt(data[0]); // Game ID, einmal in einer Variablen speichern
 
-        // name from first player
-        let row = await database.pool.query(`select player1_name from roomdata where RoomID = ?`, [parseInt(data[0])]);
-        let FirstPlayerName = row[0][0].player1_name;
+        try {
+            // Datenbankabfrage, um alle benötigten Daten in einer Anfrage abzurufen
+            let query = `
+                SELECT player2_name, player2_icon, player2_advancedIcon, player2_IconColor, player1_name 
+                FROM roomdata 
+                WHERE RoomID = ?`;
+            let result = await database.pool.query(query, [roomId]);
 
-        let firstplayerData_name = result[0][0].player2_name // user name
-        let firstplayerData_icon = result1[0][0].player2_icon // user icon
-        let firstplayerData_advanced_icon = result2[0][0].player2_advancedIcon // user advanced skin, if he doesn't have one it displays "empty" so his shoosed letter
-        let firstplayerData_icon_color = result3[0][0].player2_IconColor // skin color of user
+            if (result[0].length === 0) {
+                console.error(`No data found for RoomID: ${roomId}`);
+                return;
+            };
 
-        // updates the html of all players in the room with the name and data of the second player
-        io.to(parseInt(data[0])).emit('SecondPlayer_Joined', [firstplayerData_name, firstplayerData_icon,
-            firstplayerData_advanced_icon, firstplayerData_icon_color, false, "thirdPlayer_RequestsData", FirstPlayerName
-        ]); // second parameter => icon of second player
+            // Extrahieren der Ergebnisse aus der Abfrage
+            let player2_name = result[0][0].player2_name; // Name des zweiten Spielers
+            let player2_icon = result[0][0].player2_icon; // Icon des zweiten Spielers
+            let player2_advancedIcon = result[0][0].player2_advancedIcon; // Erweitertes Icon des zweiten Spielers
+            let player2_icon_color = result[0][0].player2_IconColor; // Farbe des Icons des zweiten Spielers
+            let player1_name = result[0][0].player1_name; // Name des ersten Spielers
+
+            // Updates der HTML für alle Spieler im Raum mit den Daten des zweiten Spielers
+            io.to(roomId).emit('SecondPlayer_Joined', [
+                player2_name, // Name des zweiten Spielers
+                player2_icon, // Icon des zweiten Spielers
+                player2_advancedIcon, // Erweitertes Icon des zweiten Spielers
+                player2_icon_color, // Farbe des Icons
+                false, // Event-Status (false)
+                "thirdPlayer_RequestsData", // Event-Type
+                player1_name // Name des ersten Spielers
+            ]);
+        } catch (error) {
+            console.error(`Error fetching data for RoomID: ${roomId}`, error);
+        };
     });
 
     // admin wants to start the game
@@ -463,7 +474,7 @@ io.on('connection', socket => {
         cells[cellIndex] = '§';
     };
 
-    socket.on("activateEyeDamage", async(id, cellDistance) => {
+    socket.on("activateEyeDamage", async(id, cellDistance) => { // legacy code. not in use. do not touch
         let cells = [];
 
         async function doBlock() {
@@ -480,15 +491,15 @@ io.on('connection', socket => {
                 };
             };
         };
-        await doBlock();
 
+        await doBlock();
         await io.to(parseInt(id)).emit("EyeDamage", cells);
     });
 
     // user leaves lobby. if admin leaves lobby => room gets killes and all users in there gets kicked out
     socket.on('user_left_lobby', async(user, roomID, from_continue_btn, tournament_opponent_id, callback) => {
         try {
-            await database.pool.query(`update roomdata set win_combinations = JSON_ARRAY(),p1_points = 0, p2_points = 0 where RoomID = ?`, [parseInt(roomID)]);
+            await database.pool.query(`update roomdata set win_combinations = JSON_ARRAY(),p1_points = 0, p2_points = 0, players = players - 1 where RoomID = ?`, [parseInt(roomID)]);
 
             // general things
             if (user == 'admin') {
