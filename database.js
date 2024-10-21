@@ -80,10 +80,25 @@ async function getTreasure_TimeStamp(player_id) {
 
 // user updates his name or creates one. this name needs to be stored in 'players' table
 async function PlayerUpdatesData(player_id, newName, newIcon, playerInfoClass, playerInfoColor) {
-    await pool.query(`update players set player_name = ? where player_id = ?`, [newName, player_id]);
-    await pool.query('update players set player_icon = ? where player_id = ?', [newIcon, player_id]);
-    await pool.query(`update players set playerInfoClass = ? where player_id = ?`, [playerInfoClass, player_id]);
-    await pool.query('update players set playerInfoColor = ? where player_id = ?', [playerInfoColor, player_id]);
+    try {
+        await pool.query(`UPDATE players 
+            SET player_name = ?, 
+                player_icon = ?, 
+                playerInfoClass = ?, 
+                playerInfoColor = ? 
+            WHERE player_id = ?`, [newName, newIcon, playerInfoClass, playerInfoColor, player_id]);
+
+        return 'success'; // Erfolgreich abgeschlossen
+
+    } catch (error) {
+        // Überprüfe, ob der Fehler ein Duplikat-Fehler (z.B. UNIQUE-Constraint) ist
+        if (error.code === 'ER_DUP_ENTRY') { // MySQL-Duplikat-Fehlercode
+            return 'duplicate';
+        } else {
+            console.log(error); // Logge den Fehler, falls es ein anderer Fehler ist
+            return 'error'; // Allgemeiner Fehler
+        };
+    };
 };
 
 // player creates room
@@ -326,8 +341,13 @@ const NewPlayerProfileQuote = async(quote, player_id) => {
 
 // Update all user data to database as quick fix
 const UpdateAllUserData = async(player_name, player_icon, playerInfoClass, playerInfoColor, quote, onlineGamesWon, XP, current_used_skin, player_id, commonPattern) => {
-    await pool.query(`update players set player_name = ?, player_icon = ?, playerInfoClass = ?, playerInfoColor = ?, quote = ?, onlineGamesWon = ?, 
-    XP = ?, currentUsedSkin = ?, commonPattern = ? where player_id = ?`, [player_name, player_icon, playerInfoClass, playerInfoColor, quote, onlineGamesWon, XP, current_used_skin, commonPattern, player_id]);
+    try {
+        await pool.query(`update players set player_name = ?, player_icon = ?, playerInfoClass = ?, playerInfoColor = ?, quote = ?, onlineGamesWon = ?, 
+            XP = ?, currentUsedSkin = ?, commonPattern = ? where player_id = ?`, [player_name, player_icon, playerInfoClass, playerInfoColor, quote, onlineGamesWon, XP, current_used_skin, commonPattern, player_id]);
+
+    } catch (error) {
+        console.log(error);
+    };
 };
 
 // search a player in player table with an id or name

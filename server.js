@@ -33,13 +33,12 @@ App.use(express.json());
 App.use(express.static('./node_modules/@socket.io/admin-ui/ui/dist'));
 
 App.get('/', (req, res) => {
-    res.send('Secret server for complex toe from josef stips');
+    res.send('Secret server for complex toe from josef');
 });
 
 App.get('/gfiv47859z597832gtruzfds783w4', async(req, res) => {
     // request from database
     let [result] = await database.pool.query(`select * from players`);
-
     res.json(result);
 });
 
@@ -233,8 +232,9 @@ io.on('connection', socket => {
     });
 
     // user updated his name on his local game, the updated name needs to be stored in the database
-    socket.on("sendNameToDatabase", async(PlayerID, updatedName, updatedIcon, userInfoClass, userIncoColor) => {
-        await database.PlayerUpdatesData(parseInt(PlayerID), updatedName, updatedIcon, userInfoClass, userIncoColor);
+    socket.on("sendNameToDatabase", async(PlayerID, updatedName, updatedIcon, userInfoClass, userIncoColor, cb) => {
+        let status = await database.PlayerUpdatesData(parseInt(PlayerID), updatedName, updatedIcon, userInfoClass, userIncoColor);
+        cb({ status });
     });
 
     // create game room (lobby) and its game code
