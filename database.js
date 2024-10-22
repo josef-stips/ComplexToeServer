@@ -165,72 +165,6 @@ async function DeleteRoom(id) {
     };
 };
 
-// start player clock for the first/second player
-async function StartPlayerClock(eventName, id, currPlayerTimer, currentPlayerNumber) {
-    // request the Player Clock starting second (ex. 70,50,30,15,5) from the room data 
-    let MaxTimerValue;
-    try {
-        let results = await pool.query(`select PlayerTimer from roomdata where RoomID = ?`, [id]);
-        MaxTimerValue = results[0][0].PlayerTimer;
-    } catch (error) {
-        console.log(error);
-    };
-
-    // reset the both timer
-    let sql = `update roomdata set player1_timer = ?, player2_timer = ? where RoomID = ?`;
-    await pool.query(sql, [MaxTimerValue, MaxTimerValue, id]);
-
-    // Aktuelle Zeit als Startzeit für das MySQL-Event (+ 2 Stunden, wie in Ihrem Code)
-    let currentDateTime = new Date();
-
-    // Endzeit für das MySQL-Event berechnen, indem MaxTimerValue Sekunden zur aktuellen Zeit hinzugefügt werden
-    let formattedEndDateTime = new Date();
-    formattedEndDateTime.setSeconds(formattedEndDateTime.getSeconds() + MaxTimerValue);
-
-    currentDateTime.setHours(currentDateTime.getHours() + 2);
-    formattedEndDateTime.setHours(formattedEndDateTime.getHours() + 2);
-
-    // create "interval"
-    const connection = await pool.getConnection();
-
-    try {
-        // Ausgabe von Start- und Endzeit
-        console.log(currentDateTime.toISOString().slice(0, 19).replace('T', ' '), formattedEndDateTime.toISOString().slice(0, 19).replace('T', ' '));
-
-        await connection.query(`
-            CREATE EVENT IF NOT EXISTS ${eventName}
-
-            ON SCHEDULE EVERY 1 SECOND STARTS '${currentDateTime.toISOString().slice(0, 19).replace('T', ' ')}' ENDS '${formattedEndDateTime.toISOString().slice(0, 19).replace('T', ' ')}'
- 
-            DO BEGIN
-
-                UPDATE roomdata
-                SET ${currPlayerTimer} = GREATEST(${currPlayerTimer} - 1, 0),
-                    currentPlayer = CASE WHEN ${currPlayerTimer} <= 0 THEN ${currentPlayerNumber} ELSE ${currentPlayerNumber} END
-                WHERE RoomID = ${id};
-                
-            END
-        `);
-    } catch (error) {
-        console.error(error);
-    } finally {
-        connection.release();
-    };
-};
-
-// when game gets killed: stop both player1_timer event scheduler and the second one
-async function DeletePlayerClocks(eventName1, eventName2) {
-    let connection = pool.getConnection();
-    try {
-        (await connection).query(`drop event if exists ${eventName1}`);
-        (await connection).query(`drop event if exists ${eventName2}`);
-    } catch (error) {
-        console.log(error)
-    } finally {
-        (await connection).release();
-    };
-};
-
 // user joins the lobby => all data from the user needs to be added now
 async function UserJoinsRoom(GameID, UserName, icon, socketID, advancedIcon, IconColor, player_id, p_XP) {
     await pool.query(`update roomdata set player2_name = ?, player2_icon = ?, player2_socketID = ?, player2_advancedIcon = ?, player2_IconColor = ?, player2_id = ?, p2_XP = ? where RoomID = ?`, [UserName, icon, socketID, advancedIcon, IconColor, player_id, p_XP, GameID]);
@@ -251,80 +185,29 @@ async function BlockerLeavesRoom(GameID) {
     await pool.query(`update roomdata set player3_name = "", player3_socketID = "" where RoomID = ?`, [GameID]);
 };
 
-// start eye attack interval
-async function startEyeAttackInterval(GameID, eventName) {
-    await pool.query(`update roomdata set eyeAttackInterval = 60 where roomID = ?`, [parseInt(GameID)]);
-
-    // create "interval" for eye attack so it is synchronous in all clients
-    const connection = await pool.getConnection();
-    try {
-        await connection.query(`
-                CREATE EVENT IF NOT EXISTS ${eventName}
-                ON SCHEDULE EVERY 1 SECOND
-                DO
-                BEGIN
-                    DECLARE current_attackInterval_${GameID} INT;
-    
-                    SELECT eyeAttackInterval INTO current_attackInterval_${GameID} FROM roomdata WHERE roomID = ${GameID};
-    
-                    IF current_attackInterval_${GameID} > 0 THEN
-                        UPDATE roomData
-                        SET eyeAttackInterval = GREATEST(eyeAttackInterval - 1, 0)
-                        WHERE RoomID = ${GameID};
-                    ELSE
-                        DROP EVENT IF EXISTS ${eventName};
-                    END IF;
-                END
-            `);
-    } catch (error) {
-        console.error(error);
-    } finally {
-        connection.release();
-    };
-};
-
-// stop eye attack interval when it reaches its end and the eye attacks
-async function stopEyeAttackInterval(eventName) {
-    let connection = pool.getConnection();
-    try {
-        (await connection).query(`drop event if exists ${eventName}`);
-    } catch (error) {
-        console.log(error)
-    } finally {
-        (await connection).release();
-    };
-};
-
 // Find room by socket id and check which role that socketID had in that room
 // If the socketID belongs to no room so nothing could be found, everything is okay and nothing needs to do
 async function FindRoomBySocketID(socketID) {
-    // check if the socketID that disconnected is the admin
-    let results1 = await pool.query(`select * from roomdata where player1_socketID = ?`, [socketID]);
-    let results2 = await pool.query(`select * from roomdata where player2_socketID = ?`, [socketID]);
-    let results3 = await pool.query(`select * from roomdata where player3_socketID = ?`, [socketID]);
+    try {
+        // List of all columns to find the value of
+        const socketFields = ['player1_socketID', 'player2_socketID', 'player3_socketID'];
 
-    // console.log(results1);
-    // console.log(results2);
-    // console.log(results3);
+        for (const [index, field] of socketFields.entries()) {
+            let result = await pool.query(`SELECT * FROM roomdata WHERE ${field} = ?`, [socketID]);
 
-    if (results1[0].length > 0) { // socket is admin in a room
-        let roomData = results1[0][0];
+            if (result[0].length > 0) {
+                let roomData = result[0][0];
+                let role = index === 0 ? "admin" : index === 1 ? "user" : "blocker";
+                return [role, roomData]; // return role and room data
+            };
+        };
 
-        console.log(roomData)
-        return ["admin", roomData];
+        // find no result
+        console.log(`Disconnected socket: ${socketID} is in no room`);
+        return [];
 
-    } else if (results2[0].length > 0) { // socket is user in a room
-        let roomData = results2[0][0];
-
-        return ["user", roomData];
-
-    } else if (results3[0].length > 0) { // socket is blocker in a room
-        let roomData = results3[0][0];
-
-        return ["blocker", roomData];
-
-    } else { // socket was in no room
-        console.log(`disconnected socket: ${socketID} is in no room`);
+    } catch (error) {
+        console.error(`Error finding room by socket ID: ${error.message}`);
         return [];
     };
 };
@@ -374,7 +257,7 @@ const SaveNewLevel = async(id, levelData) => {
             levelData.levelicon, JSON.stringify(levelData.allowedpatterns), JSON.stringify(levelData.costumPatterns), JSON.stringify(levelData.costumField), levelData.BotMode, JSON.stringify(levelData.BotPatterns), levelData.id,
         ]);
 
-        console.log(rows, levelData.id);
+        // console.log(rows, levelData.id);
         return levelData.id;
 
     } else {
@@ -387,7 +270,7 @@ const SaveNewLevel = async(id, levelData) => {
             levelData.levelicon, JSON.stringify(levelData.allowedpatterns), JSON.stringify(date[0]["current_date"]), JSON.stringify(levelData.costumPatterns), JSON.stringify(levelData.costumField), levelData.BotMode, JSON.stringify(levelData.BotPatterns)
         ]);
 
-        console.log(rows);
+        // console.log(rows);
         return rows.insertId; // unique id of the level
     };
 };
@@ -395,7 +278,7 @@ const SaveNewLevel = async(id, levelData) => {
 
 // create new clan
 const CreateClan = async(clan_name, clan_logo, clan_description, player_data, clan_room_id, cb) => {
-    console.log(clan_name, clan_logo, clan_description, player_data);
+    // console.log(clan_name, clan_logo, clan_description, player_data);
 
     try {
         let query = `
@@ -441,7 +324,7 @@ const CreateClan = async(clan_name, clan_logo, clan_description, player_data, cl
 
 // load new column to gameLogs
 const new_gamLog_entry = async(gameData) => {
-    console.log(gameData);
+    // console.log(gameData);
 
     let [row] = await pool.query(
         `insert into gamelogs (
@@ -579,7 +462,7 @@ async function CreateClanTournament(data, clan_id, player_id) {
             JSON.stringify(roundSchedule)
 
         ]).then(([rows]) => {
-            console.log(rows);
+            // console.log(rows);
         }).catch(err => {
             console.log(err);
         });
@@ -616,17 +499,13 @@ module.exports = {
     Player_UpdateConnection: Player_UpdateConnection,
     CreateRoom: CreateRoom,
     DeleteRoom: DeleteRoom,
-    StartPlayerClock: StartPlayerClock,
     pool: pool,
-    DeletePlayerClocks: DeletePlayerClocks,
     UserLeavesRoom: UserLeavesRoom,
     BlockerLeavesRoom: BlockerLeavesRoom,
     FindRoomBySocketID: FindRoomBySocketID,
     UserJoinsRoom: UserJoinsRoom,
     BlockerJoinsRoom: BlockerJoinsRoom,
     UpdateGameData: UpdateGameData,
-    startEyeAttackInterval: startEyeAttackInterval,
-    stopEyeAttackInterval: stopEyeAttackInterval,
     NewPlayerProfileQuote: NewPlayerProfileQuote,
     UpdateAllUserData: UpdateAllUserData,
     SearchPlayers: SearchPlayers,
