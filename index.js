@@ -31,10 +31,10 @@ instrument(io, {
 });
 
 App.use(express.json());
-App.use(express.static('./node_modules/@socket.io/admin-ui/ui/dist'));
+App.use(express.static('public'));
 
 App.get('/', (req, res) => {
-    res.send('Secret server for complex toe from josef');
+    res.sendFile("index.html", {root: "public"})
 });
 
 App.get('/gfiv47859z597832gtruzfds783w4', async(req, res) => {

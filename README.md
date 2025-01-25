@@ -1,3 +1,0 @@
-# ComplexToeServer
-
-Server for ComplexToe
